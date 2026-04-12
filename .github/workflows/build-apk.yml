@@ -1,0 +1,70 @@
+name: Build & Release APK
+
+# 트리거: v* 태그 푸시 시 실행 (예: v1.0.0, v1.0.1)
+on:
+  push:
+    tags:
+      - 'v*'
+
+  # 수동 실행도 가능
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Java (Gradle needs JDK)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate code (Riverpod)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Rename APK with version
+        run: |
+          VERSION=${GITHUB_REF_NAME:-manual}
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/SnapPuzzle-${VERSION}.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SnapPuzzle-APK
+          path: build/app/outputs/flutter-apk/SnapPuzzle-*.apk
+
+      # 태그 푸시일 때만 GitHub Release 생성
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SnapPuzzle ${{ github.ref_name }}
+          body: |
+            ## SnapPuzzle ${{ github.ref_name }}
+
+            ### 설치 방법 (Android)
+            1. 아래 `SnapPuzzle-${{ github.ref_name }}.apk` 파일을 폰/패드에서 다운로드
+            2. 설정 → 출처를 알 수 없는 앱 허용
+            3. 다운로드한 APK 파일 열기 → 설치
+          files: build/app/outputs/flutter-apk/SnapPuzzle-*.apk
+          draft: false
+          prerelease: false

@@ -23,13 +23,6 @@ class PuzzleModeCard extends StatelessWidget {
         PuzzleType.spotDifference => AppColors.spotDifference,
       };
 
-  static IconData _icon(PuzzleType type) => switch (type) {
-        PuzzleType.jigsaw => Icons.extension_rounded,
-        PuzzleType.slide => Icons.grid_view_rounded,
-        PuzzleType.rotate => Icons.rotate_right_rounded,
-        PuzzleType.spotDifference => Icons.find_in_page_rounded,
-      };
-
   @override
   Widget build(BuildContext context) {
     final color = _cardColor(type);
@@ -57,7 +50,7 @@ class PuzzleModeCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(_icon(type),
+            Icon(type.icon,
                 size: AppSizes.iconXl, color: Colors.white),
             const SizedBox(height: AppSizes.sm),
             Text(

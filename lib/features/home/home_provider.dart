@@ -3,15 +3,6 @@ import '../../core/database/database_helper.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/models/settings.dart';
 
-final userProfileProvider =
-    FutureProvider<UserProfile>((ref) async {
-  return DatabaseHelper.instance.getUserProfile();
-});
-
-final settingsProvider = FutureProvider<AppSettings>((ref) async {
-  return DatabaseHelper.instance.getSettings();
-});
-
 /// Mutable notifier that keeps the in-memory user profile in sync
 /// with the database after puzzle completions or play-time updates.
 class UserProfileNotifier extends AsyncNotifier<UserProfile> {

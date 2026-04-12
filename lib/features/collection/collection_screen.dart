@@ -119,13 +119,11 @@ class _AlbumCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Thumbnail
               Image.file(
                 File(entry.photo.thumbnailPath),
                 fit: BoxFit.cover,
               ),
 
-              // Gradient overlay
               Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
@@ -137,7 +135,6 @@ class _AlbumCard extends StatelessWidget {
                 ),
               ),
 
-              // Gold frame badge
               if (allDone)
                 Positioned(
                   top: AppSizes.xs,
@@ -153,7 +150,6 @@ class _AlbumCard extends StatelessWidget {
                   ),
                 ),
 
-              // Mode badges
               Positioned(
                 top: AppSizes.xs,
                 left: AppSizes.xs,
@@ -166,7 +162,6 @@ class _AlbumCard extends StatelessWidget {
                 ),
               ),
 
-              // Stars + date
               Positioned(
                 bottom: AppSizes.sm,
                 left: AppSizes.sm,
@@ -205,13 +200,6 @@ class _ModeBadge extends StatelessWidget {
   final PuzzleType type;
   final bool done;
 
-  static IconData _icon(PuzzleType t) => switch (t) {
-        PuzzleType.jigsaw => Icons.extension_rounded,
-        PuzzleType.slide => Icons.grid_view_rounded,
-        PuzzleType.rotate => Icons.rotate_right_rounded,
-        PuzzleType.spotDifference => Icons.find_in_page_rounded,
-      };
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -223,11 +211,8 @@ class _ModeBadge extends StatelessWidget {
             ? AppColors.pieceCorrect
             : Colors.black.withAlpha(120),
       ),
-      child: Icon(_icon(type), size: 12, color: Colors.white),
+      child: Icon(type.icon, size: 12, color: Colors.white),
     );
   }
 }
 
-extension on int {
-  int clamp(int low, int high) => this < low ? low : this > high ? high : this;
-}

@@ -11,6 +11,7 @@ import '../../../core/models/photo.dart';
 import '../../../core/models/puzzle_type.dart';
 import '../../../shared/utils/haptic_utils.dart';
 import '../../../shared/utils/image_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 import '../../../shared/widgets/loading_overlay.dart';
 import '../completion_screen.dart';
 
@@ -150,13 +151,9 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
     final limit = widget.difficulty.spotTimeLimitSeconds;
     if (limit != null) {
       final remaining = (limit - _elapsedSeconds).clamp(0, limit);
-      final m = remaining ~/ 60;
-      final s = remaining % 60;
-      return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+      return TimeUtils.mmss(remaining);
     }
-    final m = _elapsedSeconds ~/ 60;
-    final s = _elapsedSeconds % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    return TimeUtils.mmss(_elapsedSeconds);
   }
 
   @override
@@ -196,7 +193,6 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
       ),
       body: Column(
         children: [
-          // Progress dots
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSizes.sm),
             child: Row(
@@ -218,11 +214,9 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
             ),
           ),
 
-          // Two-panel image comparison
           Expanded(
             child: Row(
               children: [
-                // Original
                 Expanded(
                   child: _ImagePanel(
                     bytes: _originalBytes!,
@@ -235,7 +229,6 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
                   ),
                 ),
                 const SizedBox(width: 2),
-                // Modified
                 Expanded(
                   child: _ImagePanel(
                     bytes: _modifiedBytes!,
@@ -401,6 +394,3 @@ class _RippleCircleState extends State<_RippleCircle>
   }
 }
 
-extension on int {
-  int clamp(int low, int high) => this < low ? low : this > high ? high : this;
-}

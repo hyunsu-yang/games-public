@@ -11,6 +11,7 @@ import '../../core/models/puzzle_record.dart';
 import '../../core/models/puzzle_type.dart';
 import '../../shared/utils/haptic_utils.dart';
 import '../../shared/utils/star_calculator.dart';
+import '../../shared/utils/time_utils.dart';
 import '../../shared/widgets/confetti_overlay.dart';
 import '../../shared/widgets/star_display.dart';
 import '../home/home_provider.dart';
@@ -68,11 +69,7 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
         .addStars(_stars);
   }
 
-  String _formatTime(int seconds) {
-    final m = seconds ~/ 60;
-    final s = seconds % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
+  String _formatTime(int seconds) => TimeUtils.mmss(seconds);
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +77,6 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -97,7 +93,6 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
               children: [
                 const SizedBox(height: AppSizes.xl),
 
-                // Trophy icon
                 Container(
                   width: 100,
                   height: 100,
@@ -125,7 +120,6 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
 
                 const SizedBox(height: AppSizes.xl),
 
-                // Stars
                 StarDisplay(
                   stars: _stars,
                   size: AppSizes.starSizeLg,
@@ -134,7 +128,6 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
 
                 const SizedBox(height: AppSizes.lg),
 
-                // Stats row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -160,7 +153,6 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
 
                 const SizedBox(height: AppSizes.xl),
 
-                // Thumbnail
                 ClipRRect(
                   borderRadius:
                       BorderRadius.circular(AppSizes.radiusMd),
@@ -174,7 +166,6 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
 
                 const Spacer(),
 
-                // Action buttons
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppSizes.xl,
@@ -214,7 +205,6 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
             ),
           ),
 
-          // Confetti
           ConfettiOverlay(onDone: () {}),
         ],
       ),

@@ -208,11 +208,15 @@ class DatabaseHelper {
   Future<void> addPlayTime(int seconds) async {
     final db = await database;
     final now = DateTime.now();
-    final profile = await getUserProfile();
+    final rows = await db.query(
+      'user_profile',
+      columns: ['last_play_date'],
+      where: 'id = 1',
+    );
+    final lastDateStr = rows.isNotEmpty ? rows.first['last_play_date'] as String? : null;
+    final lastDate = lastDateStr != null ? DateTime.tryParse(lastDateStr) : null;
 
-    // Reset daily timer if it's a new day
-    final isNewDay = profile.lastPlayDate == null ||
-        !_isSameDay(profile.lastPlayDate!, now);
+    final isNewDay = lastDate == null || !_isSameDay(lastDate, now);
 
     if (isNewDay) {
       await db.update(

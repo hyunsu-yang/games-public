@@ -38,7 +38,6 @@ class _HomeBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Gradient background
         Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -54,7 +53,6 @@ class _HomeBody extends StatelessWidget {
 
         Column(
           children: [
-            // ── Top bar ───────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSizes.md, vertical: AppSizes.sm),
@@ -90,11 +88,9 @@ class _HomeBody extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // ── Camera button ─────────────────────────────────────
                     _CameraButton(),
                     const SizedBox(height: AppSizes.xxl),
 
-                    // ── Bottom action row ─────────────────────────────────
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [

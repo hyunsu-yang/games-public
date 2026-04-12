@@ -11,6 +11,7 @@ import '../../../core/models/photo.dart';
 import '../../../core/models/puzzle_type.dart';
 import '../../../shared/utils/haptic_utils.dart';
 import '../../../shared/utils/image_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 import '../../../shared/widgets/loading_overlay.dart';
 import '../completion_screen.dart';
 import 'slide_engine.dart';
@@ -102,11 +103,7 @@ class _SlideScreenState extends State<SlideScreen> {
     );
   }
 
-  String _formatTime() {
-    final m = _elapsedSeconds ~/ 60;
-    final s = _elapsedSeconds % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
+  String _formatTime() => TimeUtils.mmss(_elapsedSeconds);
 
   @override
   Widget build(BuildContext context) {

@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// All supported puzzle modes.
 enum PuzzleType {
   jigsaw,
@@ -17,6 +19,13 @@ enum PuzzleType {
         PuzzleType.slide => '밀어서 완성해요!',
         PuzzleType.rotate => '돌려서 맞춰요!',
         PuzzleType.spotDifference => '다른 부분을 찾아요!',
+      };
+
+  IconData get icon => switch (this) {
+        PuzzleType.jigsaw => Icons.extension_rounded,
+        PuzzleType.slide => Icons.grid_view_rounded,
+        PuzzleType.rotate => Icons.rotate_right_rounded,
+        PuzzleType.spotDifference => Icons.find_in_page_rounded,
       };
 
   String get dbValue => switch (this) {

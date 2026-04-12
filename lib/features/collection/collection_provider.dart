@@ -32,12 +32,22 @@ class AlbumEntry {
 }
 
 final albumProvider = FutureProvider<List<AlbumEntry>>((ref) async {
-  final photos = await DatabaseHelper.instance.getAllPhotos();
-  final entries = <AlbumEntry>[];
-  for (final photo in photos) {
-    final records =
-        await DatabaseHelper.instance.getPuzzlesForPhoto(photo.id);
-    entries.add(AlbumEntry(photo: photo, records: records));
+  final results = await Future.wait([
+    DatabaseHelper.instance.getAllPhotos(),
+    DatabaseHelper.instance.getAllPuzzleRecords(),
+  ]);
+  final photos = results[0] as List<Photo>;
+  final allRecords = results[1] as List<PuzzleRecord>;
+
+  final recordsByPhoto = <String, List<PuzzleRecord>>{};
+  for (final record in allRecords) {
+    recordsByPhoto.putIfAbsent(record.photoId, () => []).add(record);
   }
-  return entries;
+
+  return photos
+      .map((photo) => AlbumEntry(
+            photo: photo,
+            records: recordsByPhoto[photo.id] ?? [],
+          ))
+      .toList();
 });

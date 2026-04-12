@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,8 +13,8 @@ import '../../../core/models/photo.dart';
 import '../../../core/models/puzzle_type.dart';
 import '../../../shared/utils/haptic_utils.dart';
 import '../../../shared/utils/image_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 import '../../../shared/widgets/loading_overlay.dart';
-import '../../../shared/widgets/star_display.dart';
 import '../completion_screen.dart';
 
 class JigsawScreen extends ConsumerStatefulWidget {
@@ -179,11 +180,7 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
     );
   }
 
-  String _formatTime() {
-    final m = _elapsedSeconds ~/ 60;
-    final s = _elapsedSeconds % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
+  String _formatTime() => TimeUtils.mmss(_elapsedSeconds);
 
   final _boardKey = GlobalKey();
 
@@ -217,12 +214,9 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
       ),
       body: _loading
           ? const LoadingOverlay()
-          : WithLoadingOverlay(
-              isLoading: false,
-              child: Column(
-                children: [
-                  // ── Board ──────────────────────────────────────────────
-                  Expanded(
+          : Column(
+              children: [
+                Expanded(
                     flex: 3,
                     child: Padding(
                       padding: const EdgeInsets.all(AppSizes.boardPadding),
@@ -242,8 +236,7 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
                     ),
                   ),
 
-                  // ── Piece tray ─────────────────────────────────────────
-                  Expanded(
+                Expanded(
                     flex: 2,
                     child: _PieceTray(
                       pieces: _pieces ?? [],
@@ -253,8 +246,7 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
                       onDrop: _onPieceDrop,
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
     );
   }
@@ -314,7 +306,6 @@ class _JigsawBoard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Ghost background (hint)
           if (showHint)
             Opacity(
               opacity: 0.25,
@@ -326,7 +317,6 @@ class _JigsawBoard extends StatelessWidget {
               ),
             ),
 
-          // Grid guide lines (easy mode)
           if (difficulty.jigsawShowGuide)
             CustomPaint(
               painter: _GridPainter(
@@ -336,7 +326,6 @@ class _JigsawBoard extends StatelessWidget {
               child: const SizedBox.expand(),
             ),
 
-          // Placed pieces
           ...pieces
               .where((p) => p.isPlaced)
               .map((p) => _PlacedPiece(piece: p)),
@@ -449,7 +438,7 @@ class _TrayPiece extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Transform.rotate(
-      angle: piece.rotationDeg * 3.14159265 / 180,
+      angle: piece.rotationDeg * math.pi / 180,
       child: Container(
         width: w,
         height: h,

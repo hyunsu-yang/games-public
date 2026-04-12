@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App identity -->
+    <key>CFBundleDisplayName</key>
+    <string>SnapPuzzle</string>
+    <key>CFBundleName</key>
+    <string>snappuzzle</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleVersion</key>
+    <string>$(FLUTTER_BUILD_NUMBER)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(FLUTTER_BUILD_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+
+    <!-- Supported platforms -->
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>iPhoneOS</string>
+    </array>
+    <key>MinimumOSVersion</key>
+    <string>16.0</string>
+
+    <!-- Supported orientations (iPad + iPhone) -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+
+    <!-- Privacy usage descriptions (required for App Store) -->
+    <key>NSCameraUsageDescription</key>
+    <string>사진을 찍어 퍼즐을 만들려면 카메라 접근이 필요해요.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>갤러리에서 사진을 선택해 퍼즐을 만들려면 사진 접근이 필요해요.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>찍은 사진을 갤러리에 저장하려면 사진 접근이 필요해요.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>이 앱은 마이크를 사용하지 않습니다.</string>
+
+    <!-- No external URL schemes (COPPA: no external links) -->
+
+    <!-- Status bar -->
+    <key>UIStatusBarHidden</key>
+    <false/>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+
+    <!-- Flutter embedding -->
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>io.flutter.embedded_views_preview</key>
+    <true/>
+
+    <!-- Age rating metadata hint (App Store Connect must be set separately) -->
+    <!-- Content rating: 4+ -->
+
+    <!-- iCloud backup disabled (COPPA — no personal data leaves device) -->
+    <key>NSUbiquitousContainers</key>
+    <dict/>
+</dict>
+</plist>

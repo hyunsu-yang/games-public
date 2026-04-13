@@ -37,7 +37,7 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     return DatabaseHelper.instance.getSettings();
   }
 
-  Future<void> update(AppSettings settings) async {
+  Future<void> updateSettings(AppSettings settings) async {
     await DatabaseHelper.instance.updateSettings(settings);
     ref.invalidateSelf();
   }

@@ -39,6 +39,7 @@ abstract final class AppStrings {
   static const String easyDesc = '6조각 / 힌트 있음';
   static const String mediumDesc = '12조각 / 외곽선';
   static const String hardDesc = '20조각 / 힌트 없음';
+  static const String expertDesc = '48조각 / 성인용';
 
   // Gameplay
   static const String hint = '힌트';
@@ -106,4 +107,10 @@ abstract final class AppStrings {
   // Rotate
   static const String tapToRotate = '탭하면 돌아가요!';
   static const String allCorrect = '모두 맞췄어요!';
+
+  // Delete
+  static const String deleteAlbumTitle = '앨범 삭제';
+  static const String deleteAlbumMessage = '이 사진과 퍼즐 기록을 모두 삭제할까요?';
+  static const String cancel = '취소';
+  static const String delete = '삭제';
 }

@@ -32,17 +32,19 @@ class RotateScreen extends StatefulWidget {
 }
 
 class _RotateScreenState extends State<RotateScreen> {
-  late final RotateEngine _engine;
+  late RotateEngine _engine;
   List<Uint8List>? _tiles;
   bool _loading = true;
   int _elapsedSeconds = 0;
   int _hintsUsed = 0;
   Timer? _timer;
+  int _cols = 1;
+  int _rows = 1;
+  double _imageAspectRatio = 1.0;
 
   @override
   void initState() {
     super.initState();
-    _engine = RotateEngine(difficulty: widget.difficulty);
     _initPuzzle();
   }
 
@@ -54,12 +56,18 @@ class _RotateScreenState extends State<RotateScreen> {
 
   Future<void> _initPuzzle() async {
     final g = widget.difficulty.rotateGrid;
-    final tiles = await ImageUtils.sliceIntoTiles(
+    final result = await ImageUtils.sliceIntoTiles(
         File(widget.photo.filePath), g, g);
+    _engine = RotateEngine(
+        tileCount: result.cols * result.rows,
+        allowedAngles: widget.difficulty.rotateAllowedAngles);
     _engine.shuffle();
     if (mounted) {
       setState(() {
-        _tiles = tiles;
+        _tiles = result.tiles;
+        _cols = result.cols;
+        _rows = result.rows;
+        _imageAspectRatio = result.aspectRatio;
         _loading = false;
       });
       _startTimer();
@@ -104,8 +112,6 @@ class _RotateScreenState extends State<RotateScreen> {
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: LoadingOverlay());
 
-    final g = widget.difficulty.rotateGrid;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -123,7 +129,7 @@ class _RotateScreenState extends State<RotateScreen> {
                         fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                   Text(
-                    '${_engine.correctCount}/${g * g} 완성',
+                    '${_engine.correctCount}/${_cols * _rows} 완성',
                     style: const TextStyle(fontSize: 12),
                   ),
                 ],
@@ -146,16 +152,18 @@ class _RotateScreenState extends State<RotateScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(AppSizes.md),
                 child: AspectRatio(
-                  aspectRatio: 1,
+                  aspectRatio: _imageAspectRatio,
                   child: GridView.builder(
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate:
                         SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: g,
+                      crossAxisCount: _cols,
+                      childAspectRatio:
+                          _imageAspectRatio * _rows / _cols,
                       mainAxisSpacing: 4,
                       crossAxisSpacing: 4,
                     ),
-                    itemCount: g * g,
+                    itemCount: _cols * _rows,
                     itemBuilder: (_, i) {
                       final tile = _engine.tiles[i];
                       final bytes = _tiles![i];

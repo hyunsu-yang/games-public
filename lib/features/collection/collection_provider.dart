@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database_helper.dart';
@@ -29,6 +31,18 @@ class AlbumEntry {
     matches.sort((a, b) => b.bestStars.compareTo(a.bestStars));
     return matches.first;
   }
+}
+
+/// Delete a photo and its associated puzzle records + files.
+Future<void> deleteAlbumEntry(AlbumEntry entry) async {
+  // Delete image files from filesystem
+  final photoFile = File(entry.photo.filePath);
+  final thumbFile = File(entry.photo.thumbnailPath);
+  if (photoFile.existsSync()) photoFile.deleteSync();
+  if (thumbFile.existsSync()) thumbFile.deleteSync();
+
+  // Delete from DB (CASCADE deletes puzzle records too)
+  await DatabaseHelper.instance.deletePhoto(entry.photo.id);
 }
 
 final albumProvider = FutureProvider<List<AlbumEntry>>((ref) async {

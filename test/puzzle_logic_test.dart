@@ -1,3 +1,4 @@
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:snappuzzle/core/models/puzzle_type.dart';
 import 'package:snappuzzle/features/puzzle/slide/slide_engine.dart';
@@ -59,24 +60,32 @@ void main() {
 
   group('SlideEngine', () {
     test('shuffle produces unsolved board', () {
-      final engine = SlideEngine(difficulty: Difficulty.easy);
+      final engine = SlideEngine(cols: 3, rows: 3);
       engine.shuffle();
-      // After shuffle the board is almost certainly not solved
-      // (probability 1/9! ≈ 0.00003% to be solved)
-      // We just verify it has the right number of tiles.
       expect(engine.tiles.length, 9);
       expect(engine.tiles.contains(0), isTrue);
     });
 
-    test('valid move decrements empty index correctly', () {
-      final engine = SlideEngine(difficulty: Difficulty.easy);
+    test('canMove identifies adjacent tiles', () {
+      final engine = SlideEngine(cols: 3, rows: 3);
       engine.shuffle();
       final empty = engine.emptyIndex;
-      final grid = engine.grid;
 
-      // Find a tile above empty (if any) and move it
-      if (empty >= grid) {
-        final above = empty - grid;
+      // Tiles adjacent to empty should be movable
+      if (empty >= 3) {
+        expect(engine.canMove(empty - 3), isTrue);
+      }
+      // Tile at empty position is not movable
+      expect(engine.canMove(empty), isFalse);
+    });
+
+    test('move swaps tile with empty', () {
+      final engine = SlideEngine(cols: 3, rows: 3);
+      engine.shuffle();
+      final empty = engine.emptyIndex;
+
+      if (empty >= 3) {
+        final above = empty - 3;
         final moved = engine.move(above);
         expect(moved, isTrue);
         expect(engine.emptyIndex, above);
@@ -84,22 +93,20 @@ void main() {
       }
     });
 
-    test('isSolved on pristine board', () {
-      final engine = SlideEngine(difficulty: Difficulty.easy);
-      // Force solved state manually
-      engine.shuffle(); // shuffles first
-      // We cannot easily force solved without exposing internals,
-      // so just verify isSolved returns false after shuffle.
-      // (Technically it could be solved by chance, but astronomically unlikely.)
-      // We test the positive case via the goal-tile logic.
-      expect(engine.goalIndexOf(0), 0);
-      expect(engine.goalIndexOf(1), 1);
+    test('moveDirection works correctly', () {
+      final engine = SlideEngine(cols: 3, rows: 3);
+      engine.shuffle();
+      // At least one direction should work
+      final upOk = engine.moveDirection(AxisDirection.up);
+      final downOk = engine.moveDirection(AxisDirection.down);
+      final leftOk = engine.moveDirection(AxisDirection.left);
+      final rightOk = engine.moveDirection(AxisDirection.right);
+      expect(upOk || downOk || leftOk || rightOk, isTrue);
     });
 
     test('illegal move returns false', () {
-      final engine = SlideEngine(difficulty: Difficulty.easy);
+      final engine = SlideEngine(cols: 3, rows: 3);
       engine.shuffle();
-      // Tile at empty index cannot move
       final moved = engine.move(engine.emptyIndex);
       expect(moved, isFalse);
     });
@@ -109,19 +116,18 @@ void main() {
 
   group('RotateEngine', () {
     test('shuffle produces non-zero rotation for some tiles', () {
-      final engine = RotateEngine(difficulty: Difficulty.medium);
+      final engine = RotateEngine(
+          tileCount: 9, allowedAngles: [0, 90, 180, 270]);
       engine.shuffle();
       expect(engine.tiles.length, 9);
-      // After shuffle at least some tiles should be non-zero
-      // (statistically guaranteed with 9 tiles and [90, 180, 270] options)
       final nonZero = engine.tiles.where((t) => t.currentAngle != 0);
       expect(nonZero, isNotEmpty);
     });
 
     test('rotateTile cycles through allowed angles', () {
-      final engine = RotateEngine(difficulty: Difficulty.easy);
+      final engine =
+          RotateEngine(tileCount: 4, allowedAngles: [0, 180]);
       engine.shuffle();
-      // Easy only allows [0, 180]
       engine.tiles[0].currentAngle = 0;
       engine.rotateTile(0);
       expect(engine.tiles[0].currentAngle, 180);
@@ -130,9 +136,9 @@ void main() {
     });
 
     test('isSolved only when all tiles are at 0°', () {
-      final engine = RotateEngine(difficulty: Difficulty.easy);
+      final engine =
+          RotateEngine(tileCount: 4, allowedAngles: [0, 180]);
       engine.shuffle();
-      // Force all to 0
       for (final t in engine.tiles) {
         t.currentAngle = 0;
       }

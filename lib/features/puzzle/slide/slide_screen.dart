@@ -31,16 +31,19 @@ class SlideScreen extends StatefulWidget {
 }
 
 class _SlideScreenState extends State<SlideScreen> {
-  late final SlideEngine _engine;
+  late SlideEngine _engine;
   List<Uint8List>? _tiles;
   bool _loading = true;
   int _elapsedSeconds = 0;
   Timer? _timer;
+  int _cols = 1;
+  int _rows = 1;
+  double _imageAspectRatio = 1.0;
+  bool _showReference = false;
 
   @override
   void initState() {
     super.initState();
-    _engine = SlideEngine(difficulty: widget.difficulty);
     _initPuzzle();
   }
 
@@ -52,12 +55,16 @@ class _SlideScreenState extends State<SlideScreen> {
 
   Future<void> _initPuzzle() async {
     final g = widget.difficulty.slideGrid;
-    final tiles = await ImageUtils.sliceIntoTiles(
+    final result = await ImageUtils.sliceIntoTiles(
         File(widget.photo.filePath), g, g);
+    _engine = SlideEngine(cols: result.cols, rows: result.rows);
     _engine.shuffle();
     if (mounted) {
       setState(() {
-        _tiles = tiles;
+        _tiles = result.tiles;
+        _cols = result.cols;
+        _rows = result.rows;
+        _imageAspectRatio = result.aspectRatio;
         _loading = false;
       });
       _startTimer();
@@ -72,14 +79,14 @@ class _SlideScreenState extends State<SlideScreen> {
 
   void _onTileTap(int index) {
     if (_tiles == null) return;
-    final moved = _engine.move(index);
-    if (!moved) {
-      HapticUtils.error();
-      return;
-    }
+    if (!_engine.canMove(index)) return;
+    _engine.move(index);
     HapticUtils.snap();
     setState(() {});
+    _checkSolved();
+  }
 
+  void _checkSolved() {
     if (_engine.isSolved) {
       _timer?.cancel();
       HapticUtils.complete();
@@ -103,13 +110,10 @@ class _SlideScreenState extends State<SlideScreen> {
     );
   }
 
-  String _formatTime() => TimeUtils.mmss(_elapsedSeconds);
-
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: LoadingOverlay());
 
-    final g = widget.difficulty.slideGrid;
     final tiles = _tiles!;
     final board = _engine.tiles;
 
@@ -118,102 +122,217 @@ class _SlideScreenState extends State<SlideScreen> {
         title: Text(
             '${AppStrings.slideMode} — ${widget.difficulty.koreanName}'),
         actions: [
+          // Reference image toggle
+          IconButton(
+            icon: Icon(_showReference
+                ? Icons.image_rounded
+                : Icons.image_outlined),
+            tooltip: '완성 이미지 보기',
+            onPressed: () => setState(() => _showReference = !_showReference),
+          ),
           Center(
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppSizes.md),
+              padding: const EdgeInsets.only(right: AppSizes.md),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    _formatTime(),
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  Text(
-                    '${AppStrings.moves}: ${_engine.moveCount}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
+                  Text(TimeUtils.mmss(_elapsedSeconds),
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700)),
+                  Text('${AppStrings.moves}: ${_engine.moveCount}',
+                      style: const TextStyle(fontSize: 12)),
                 ],
               ),
             ),
           ),
         ],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSizes.md),
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: g,
-                mainAxisSpacing: 3,
-                crossAxisSpacing: 3,
+      body: Column(
+          children: [
+            // Instruction
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSizes.sm),
+              child: Text(
+                '빈 칸 옆의 조각을 탭하거나 스와이프하세요',
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary),
               ),
-              itemCount: g * g,
-              itemBuilder: (_, i) {
-                final tileValue = board[i];
-                final isEmpty = tileValue == 0;
-                final isGoal = tileValue == i && !isEmpty;
+            ),
 
-                return GestureDetector(
-                  onTap: isEmpty ? null : () => _onTileTap(i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    decoration: BoxDecoration(
-                      color: isEmpty
-                          ? AppColors.tileBackground
-                          : null,
-                      border: isGoal
-                          ? Border.all(
-                              color: AppColors.pieceCorrect, width: 2)
-                          : Border.all(
-                              color: AppColors.tileBorder, width: 1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: isEmpty
-                        ? null
-                        : Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(3),
-                                child: Image.memory(
-                                  tiles[tileValue],
-                                  fit: BoxFit.fill,
-                                ),
-                              ),
-                              if (widget.difficulty.slideShowNumbers)
-                                Positioned(
-                                  bottom: 2,
-                                  right: 4,
-                                  child: Text(
-                                    '$tileValue',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black
-                                              .withAlpha(200),
-                                          blurRadius: 2,
-                                        ),
-                                      ],
+            // Board
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSizes.md),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: _imageAspectRatio,
+                        child: _buildBoard(tiles, board),
+                      ),
+
+                      // Reference image overlay
+                      if (_showReference)
+                        AspectRatio(
+                          aspectRatio: _imageAspectRatio,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius:
+                                  BorderRadius.circular(AppSizes.radiusMd),
+                              border: Border.all(
+                                  color: AppColors.primary, width: 2),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                  AppSizes.radiusMd - 1),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.file(File(widget.photo.filePath),
+                                      fit: BoxFit.fill),
+                                  Container(
+                                    color: Colors.black.withAlpha(100),
+                                    alignment: Alignment.center,
+                                    child: const Text(
+                                      '완성 이미지',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700),
                                     ),
                                   ),
-                                ),
-                            ],
+                                ],
+                              ),
+                            ),
                           ),
+                        ),
+                    ],
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ),
-        ),
+          ],
       ),
+    );
+  }
+
+  /// Determine swipe direction from velocity on a specific tile.
+  void _onTileSwipe(int index, Offset velocity) {
+    if (!_engine.canMove(index)) return;
+    final emptyIdx = _engine.emptyIndex;
+
+    // Calculate relative position of empty cell to this tile
+    final tileRow = index ~/ _cols;
+    final tileCol = index % _cols;
+    final emptyRow = emptyIdx ~/ _cols;
+    final emptyCol = emptyIdx % _cols;
+
+    // Only move if swipe direction matches the empty cell direction
+    final dCol = emptyCol - tileCol;
+    final dRow = emptyRow - tileRow;
+
+    bool shouldMove = false;
+    if (dCol == 1 && velocity.dx > 0) shouldMove = true; // swipe right toward empty
+    if (dCol == -1 && velocity.dx < 0) shouldMove = true; // swipe left toward empty
+    if (dRow == 1 && velocity.dy > 0) shouldMove = true; // swipe down toward empty
+    if (dRow == -1 && velocity.dy < 0) shouldMove = true; // swipe up toward empty
+
+    if (shouldMove) _onTileTap(index);
+  }
+
+  Widget _buildBoard(List<Uint8List> tiles, List<int> board) {
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _cols,
+        childAspectRatio: _imageAspectRatio * _rows / _cols,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+      ),
+      itemCount: _cols * _rows,
+      itemBuilder: (_, i) {
+        final tileValue = board[i];
+        final isEmpty = tileValue == 0;
+        final canMove = _engine.canMove(i);
+        final isCorrect = !isEmpty && tileValue == (i + 1) % (_cols * _rows);
+
+        return GestureDetector(
+          onTap: canMove ? () => _onTileTap(i) : null,
+          onPanEnd: canMove
+              ? (d) => _onTileSwipe(i, d.velocity.pixelsPerSecond)
+              : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color: isEmpty
+                  ? AppColors.tileBackground.withAlpha(120)
+                  : canMove
+                      ? AppColors.primary.withAlpha(25)
+                      : null,
+              border: isEmpty
+                  ? Border.all(
+                      color: AppColors.tileBorder.withAlpha(80),
+                      width: 1,
+                      strokeAlign: BorderSide.strokeAlignInside)
+                  : isCorrect
+                      ? Border.all(color: AppColors.pieceCorrect, width: 3)
+                      : canMove
+                          ? Border.all(color: AppColors.primary, width: 3)
+                          : Border.all(
+                              color: AppColors.tileBorder.withAlpha(60),
+                              width: 1),
+              borderRadius: BorderRadius.circular(6),
+              boxShadow: canMove && !isEmpty
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withAlpha(60),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      )
+                    ]
+                  : null,
+            ),
+            child: isEmpty
+                ? Center(
+                    child: Icon(Icons.open_with_rounded,
+                        size: 24,
+                        color: AppColors.tileBorder.withAlpha(150)),
+                  )
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: Image.memory(tiles[tileValue - 1],
+                            fit: BoxFit.fill),
+                      ),
+                      if (widget.difficulty.slideShowNumbers)
+                        Positioned(
+                          bottom: 2,
+                          right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withAlpha(150),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '$tileValue',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        );
+      },
     );
   }
 }

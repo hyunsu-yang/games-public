@@ -40,6 +40,7 @@ abstract final class AppColors {
   static const Color easy = Color(0xFF66BB6A);
   static const Color medium = Color(0xFFFFA726);
   static const Color hard = Color(0xFFEF5350);
+  static const Color expert = Color(0xFF7B1FA2);
 
   // Mode card colors
   static const Color jigsaw = Color(0xFFFF7043);

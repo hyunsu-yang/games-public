@@ -35,7 +35,9 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
   Uint8List? _originalBytes;
   Uint8List? _modifiedBytes;
   List<List<int>> _regions = [];
-  final List<int> _foundIndices = [];
+  int _srcImageWidth = 1;
+  int _srcImageHeight = 1;
+  final Set<int> _foundIndices = {};
   final List<_TapRipple> _ripples = [];
 
   int _elapsedSeconds = 0;
@@ -63,6 +65,8 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
         _originalBytes = result.originalBytes;
         _modifiedBytes = result.modifiedBytes;
         _regions = result.differenceRegions;
+        _srcImageWidth = result.imageWidth;
+        _srcImageHeight = result.imageHeight;
         _loading = false;
       });
       _startTimer();
@@ -77,43 +81,35 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
       final limit = widget.difficulty.spotTimeLimitSeconds;
       if (limit != null && _elapsedSeconds >= limit) {
         _timer?.cancel();
-        _goToCompletion(timeUp: true);
+        _goToCompletion();
       }
     });
   }
 
-  void _onTapImage(Offset localPos, Size imageSize, bool isModified) {
-    if (!isModified) return; // only the right panel is interactive
+  void _onTapImage(Offset localPos, Size renderSize) {
+    final scaleX = _srcImageWidth / renderSize.width;
+    final scaleY = _srcImageHeight / renderSize.height;
+    final tapX = localPos.dx * scaleX;
+    final tapY = localPos.dy * scaleY;
 
-    // Scale tap to image coordinates (assuming the image fills the box)
-    final imgW = _regions.isNotEmpty
-        ? (_originalBytes != null ? imageSize.width : 1.0)
-        : 1.0;
-    final imgH = imgW;
-
-    // Find the first un-found region that contains this tap
     for (var i = 0; i < _regions.length; i++) {
       if (_foundIndices.contains(i)) continue;
       final r = _regions[i];
-      // Scale region to rendered size
-      final scaleX = imageSize.width /
-          AppSizes.maxImageDimension.toDouble();
-      final scaleY = imageSize.height /
-          AppSizes.maxImageDimension.toDouble();
-      final rx = r[0] * scaleX;
-      final ry = r[1] * scaleY;
-      final rw = r[2] * scaleX;
-      final rh = r[3] * scaleY;
+      final cx = r[0].toDouble();
+      final cy = r[1].toDouble();
+      final radius = r[2].toDouble();
 
-      if (localPos.dx >= rx &&
-          localPos.dx <= rx + rw &&
-          localPos.dy >= ry &&
-          localPos.dy <= ry + rh) {
+      final dx = tapX - cx;
+      final dy = tapY - cy;
+      // 20% extra tolerance for children's taps
+      if (dx * dx + dy * dy <= radius * radius * 1.44) {
         HapticUtils.snap();
+        final highlightX = cx / scaleX;
+        final highlightY = cy / scaleY;
         setState(() {
           _foundIndices.add(i);
           _ripples.add(_TapRipple(
-            pos: Offset(rx + rw / 2, ry + rh / 2),
+            pos: Offset(highlightX, highlightY),
             key: UniqueKey(),
           ));
         });
@@ -132,7 +128,8 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
     HapticUtils.error();
   }
 
-  void _goToCompletion({bool timeUp = false}) {
+  void _goToCompletion() {
+    _ripples.clear();
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -159,7 +156,8 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: LoadingOverlay(message: '비교 이미지 만드는 중...'));
+      return const Scaffold(
+          body: LoadingOverlay(message: '비교 이미지 만드는 중...'));
     }
 
     final total = _regions.length;
@@ -193,6 +191,7 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
       ),
       body: Column(
         children: [
+          // Progress dots
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSizes.sm),
             child: Row(
@@ -214,21 +213,24 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
             ),
           ),
 
+          // Two image panels side by side
           Expanded(
             child: Row(
               children: [
+                // Original (non-interactive)
                 Expanded(
                   child: _ImagePanel(
                     bytes: _originalBytes!,
                     label: '원본',
                     foundRegions: const [],
-                    allRegions: const [],
+                    srcImageWidth: _srcImageWidth,
+                    srcImageHeight: _srcImageHeight,
                     ripples: const [],
-                    onTap: (pos, size) =>
-                        _onTapImage(pos, size, false),
+                    onTap: null,
                   ),
                 ),
                 const SizedBox(width: 2),
+                // Modified (interactive)
                 Expanded(
                   child: _ImagePanel(
                     bytes: _modifiedBytes!,
@@ -236,10 +238,10 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
                     foundRegions: _foundIndices
                         .map((i) => _regions[i])
                         .toList(),
-                    allRegions: _regions,
+                    srcImageWidth: _srcImageWidth,
+                    srcImageHeight: _srcImageHeight,
                     ripples: _ripples,
-                    onTap: (pos, size) =>
-                        _onTapImage(pos, size, true),
+                    onTap: _onTapImage,
                   ),
                 ),
               ],
@@ -264,7 +266,8 @@ class _ImagePanel extends StatelessWidget {
     required this.bytes,
     required this.label,
     required this.foundRegions,
-    required this.allRegions,
+    required this.srcImageWidth,
+    required this.srcImageHeight,
     required this.ripples,
     required this.onTap,
   });
@@ -272,9 +275,10 @@ class _ImagePanel extends StatelessWidget {
   final Uint8List bytes;
   final String label;
   final List<List<int>> foundRegions;
-  final List<List<int>> allRegions;
+  final int srcImageWidth;
+  final int srcImageHeight;
   final List<_TapRipple> ripples;
-  final void Function(Offset, Size) onTap;
+  final void Function(Offset, Size)? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -285,39 +289,44 @@ class _ImagePanel extends StatelessWidget {
               horizontal: AppSizes.sm, vertical: 2),
           color: AppColors.primary.withAlpha(30),
           child: Text(label,
-              style:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700)),
         ),
         Expanded(
           child: LayoutBuilder(
             builder: (_, constraints) {
-              final size =
+              final renderSize =
                   Size(constraints.maxWidth, constraints.maxHeight);
+              final scaleX = renderSize.width / srcImageWidth;
+              final scaleY = renderSize.height / srcImageHeight;
+
               return GestureDetector(
-                onTapDown: (d) => onTap(d.localPosition, size),
+                onTapDown: onTap != null
+                    ? (d) => onTap!(d.localPosition, renderSize)
+                    : null,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     Image.memory(bytes, fit: BoxFit.fill),
 
-                    // Highlight found differences
+                    // Highlight found differences (circular)
                     ...foundRegions.map((r) {
-                      final scaleX = size.width /
-                          AppSizes.maxImageDimension.toDouble();
-                      final scaleY = size.height /
-                          AppSizes.maxImageDimension.toDouble();
+                      final rw = r[2] * 2 * scaleX;
+                      final rh = r[2] * 2 * scaleY;
                       return Positioned(
-                        left: r[0] * scaleX,
-                        top: r[1] * scaleY,
-                        width: r[2] * scaleX,
-                        height: r[3] * scaleY,
+                        left: r[0] * scaleX - rw / 2,
+                        top: r[1] * scaleY - rh / 2,
+                        width: rw,
+                        height: rh,
                         child: Container(
                           decoration: BoxDecoration(
                             border: Border.all(
                               color: AppColors.pieceCorrect,
                               width: 2,
                             ),
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.all(
+                              Radius.elliptical(rw / 2, rh / 2),
+                            ),
                           ),
                         ),
                       );
@@ -393,4 +402,3 @@ class _RippleCircleState extends State<_RippleCircle>
     );
   }
 }
-

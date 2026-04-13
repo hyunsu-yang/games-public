@@ -48,24 +48,28 @@ enum PuzzleType {
 enum Difficulty {
   easy,
   medium,
-  hard;
+  hard,
+  expert;
 
   String get koreanName => switch (this) {
         Difficulty.easy => '쉽게 ★',
         Difficulty.medium => '보통 ★★',
         Difficulty.hard => '어려워 ★★★',
+        Difficulty.expert => '고수 ★★★★',
       };
 
   String get dbValue => switch (this) {
         Difficulty.easy => 'easy',
         Difficulty.medium => 'medium',
         Difficulty.hard => 'hard',
+        Difficulty.expert => 'expert',
       };
 
   static Difficulty fromDb(String value) => switch (value) {
         'easy' => Difficulty.easy,
         'medium' => Difficulty.medium,
         'hard' => Difficulty.hard,
+        'expert' => Difficulty.expert,
         _ => throw ArgumentError('Unknown difficulty: $value'),
       };
 
@@ -74,35 +78,41 @@ enum Difficulty {
         Difficulty.easy => 2,
         Difficulty.medium => 3,
         Difficulty.hard => 4,
+        Difficulty.expert => 6,
       };
 
   int get jigsawRows => switch (this) {
         Difficulty.easy => 3,
         Difficulty.medium => 4,
         Difficulty.hard => 5,
+        Difficulty.expert => 8,
       };
 
   int get jigsawPieceCount => jigsawCols * jigsawRows;
 
   bool get jigsawShowGuide => this == Difficulty.easy;
   bool get jigsawShowOutline => this == Difficulty.medium;
-  bool get jigsawAllowRotation => this == Difficulty.hard;
+  bool get jigsawAllowRotation =>
+      this == Difficulty.hard || this == Difficulty.expert;
 
   // ── Slide ───────────────────────────────────────────────────────────────
   int get slideGrid => switch (this) {
         Difficulty.easy => 3,
         Difficulty.medium => 4,
         Difficulty.hard => 5,
+        Difficulty.expert => 6,
       };
 
   int get slideTileCount => slideGrid * slideGrid - 1;
-  bool get slideShowNumbers => this == Difficulty.easy;
+  bool get slideShowNumbers =>
+      this == Difficulty.easy || this == Difficulty.medium;
 
   // ── Rotate ──────────────────────────────────────────────────────────────
   int get rotateGrid => switch (this) {
         Difficulty.easy => 2,
         Difficulty.medium => 3,
         Difficulty.hard => 4,
+        Difficulty.expert => 5,
       };
 
   int get rotateTileCount => rotateGrid * rotateGrid;
@@ -118,6 +128,7 @@ enum Difficulty {
         Difficulty.easy => 3,
         Difficulty.medium => 5,
         Difficulty.hard => 7,
+        Difficulty.expert => 10,
       };
 
   /// Null = no time limit
@@ -125,5 +136,6 @@ enum Difficulty {
         Difficulty.easy => null,
         Difficulty.medium => 90,
         Difficulty.hard => 60,
+        Difficulty.expert => 45,
       };
 }

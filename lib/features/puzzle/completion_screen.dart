@@ -3,9 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:uuid/uuid.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_sizes.dart';
 import '../../core/constants/app_strings.dart';
+import '../../core/database/database_helper.dart';
 import '../../core/models/photo.dart';
 import '../../core/models/puzzle_record.dart';
 import '../../core/models/puzzle_type.dart';
@@ -64,6 +67,22 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
   Future<void> _saveRecord() async {
     if (_saved) return;
     _saved = true;
+
+    // Save puzzle record to DB (shows in album)
+    final record = PuzzleRecord(
+      id: const Uuid().v4(),
+      photoId: widget.photo.id,
+      type: widget.puzzleType,
+      difficulty: widget.difficulty,
+      completedAt: DateTime.now(),
+      bestStars: _stars,
+      bestTimeSeconds: widget.elapsedSeconds,
+      totalMoves: widget.totalMoves,
+      hintsUsed: widget.hintsUsed,
+    );
+    await DatabaseHelper.instance.upsertPuzzleRecord(record);
+
+    // Update user profile stars
     await ref
         .read(userProfileNotifierProvider.notifier)
         .addStars(_stars);

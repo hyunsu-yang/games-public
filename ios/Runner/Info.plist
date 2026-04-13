@@ -5,9 +5,9 @@
 <dict>
     <!-- App identity -->
     <key>CFBundleDisplayName</key>
-    <string>SnapPuzzle</string>
+    <string>SeoaPuzzle</string>
     <key>CFBundleName</key>
-    <string>snappuzzle</string>
+    <string>seoapuzzle</string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleVersion</key>

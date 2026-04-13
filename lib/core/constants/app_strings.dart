@@ -1,13 +1,13 @@
-/// UI strings for SnapPuzzle (Korean + English).
+/// UI strings for SeoaPuzzle (Korean + English).
 ///
 /// Korean is the primary language; English keys are provided for reference.
 abstract final class AppStrings {
   // App name
-  static const String appName = 'SnapPuzzle';
+  static const String appName = 'SeoaPuzzle';
   static const String appTagline = '찍은 사진이 퍼즐이 되는 마법';
 
   // Home screen
-  static const String homeTitle = '스냅퍼즐';
+  static const String homeTitle = '서아퍼즐';
   static const String homeCameraButton = '사진 찍고 퍼즐 만들기!';
   static const String homeAlbumButton = '나의 퍼즐 앨범';
   static const String homeSettings = '설정';

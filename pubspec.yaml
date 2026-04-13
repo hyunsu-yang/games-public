@@ -1,5 +1,5 @@
-name: snappuzzle
-description: 찍은 사진이 퍼즐이 되는 마법 - SnapPuzzle for kids aged 6-8
+name: seoapuzzle
+description: 찍은 사진이 퍼즐이 되는 마법 - SeoaPuzzle for kids aged 6-8
 version: 1.0.0+1
 
 environment:

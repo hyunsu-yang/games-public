@@ -1,9 +1,9 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:snappuzzle/core/models/puzzle_type.dart';
-import 'package:snappuzzle/features/puzzle/slide/slide_engine.dart';
-import 'package:snappuzzle/features/puzzle/rotate/rotate_engine.dart';
-import 'package:snappuzzle/shared/utils/star_calculator.dart';
+import 'package:seoapuzzle/core/models/puzzle_type.dart';
+import 'package:seoapuzzle/features/puzzle/slide/slide_engine.dart';
+import 'package:seoapuzzle/features/puzzle/rotate/rotate_engine.dart';
+import 'package:seoapuzzle/shared/utils/star_calculator.dart';
 
 void main() {
   // ── Difficulty model tests ────────────────────────────────────────────────

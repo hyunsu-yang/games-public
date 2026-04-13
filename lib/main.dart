@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'shared/utils/sound_utils.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,8 @@ Future<void> main() async {
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.edgeToEdge,
   );
+
+  await SoundUtils.init();
 
   runApp(
     const ProviderScope(

@@ -12,6 +12,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/models/photo.dart';
 import '../../../core/models/puzzle_type.dart';
 import '../../../shared/utils/haptic_utils.dart';
+import '../../../shared/utils/sound_utils.dart';
 import '../../../shared/utils/jigsaw_clipper.dart';
 import '../../../shared/utils/time_utils.dart';
 import '../../../shared/widgets/loading_overlay.dart';
@@ -106,16 +107,19 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
 
   void _onPiecePlaced(_Piece piece) {
     HapticUtils.snap();
+    SoundUtils.snap();
     setState(() => piece.isPlaced = true);
     if (_allPlaced) {
       _timer?.cancel();
       HapticUtils.complete();
+      SoundUtils.complete();
       Future.delayed(const Duration(milliseconds: 600), _goToCompletion);
     }
   }
 
   void _onPieceUnplaced(_Piece piece) {
     HapticUtils.pick();
+    SoundUtils.pick();
     setState(() => piece.isPlaced = false);
   }
 

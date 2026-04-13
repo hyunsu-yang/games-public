@@ -10,6 +10,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/models/photo.dart';
 import '../../../core/models/puzzle_type.dart';
 import '../../../shared/utils/haptic_utils.dart';
+import '../../../shared/utils/sound_utils.dart';
 import '../../../shared/utils/image_utils.dart';
 import '../../../shared/utils/time_utils.dart';
 import '../../../shared/widgets/loading_overlay.dart';
@@ -82,6 +83,7 @@ class _SlideScreenState extends State<SlideScreen> {
     if (!_engine.canMove(index)) return;
     _engine.move(index);
     HapticUtils.snap();
+    SoundUtils.snap();
     setState(() {});
     _checkSolved();
   }
@@ -90,6 +92,7 @@ class _SlideScreenState extends State<SlideScreen> {
     if (_engine.isSolved) {
       _timer?.cancel();
       HapticUtils.complete();
+      SoundUtils.complete();
       Future.delayed(const Duration(milliseconds: 400), _goToCompletion);
     }
   }

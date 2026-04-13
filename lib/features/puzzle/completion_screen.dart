@@ -13,6 +13,7 @@ import '../../core/models/photo.dart';
 import '../../core/models/puzzle_record.dart';
 import '../../core/models/puzzle_type.dart';
 import '../../shared/utils/haptic_utils.dart';
+import '../../shared/utils/sound_utils.dart';
 import '../../shared/utils/star_calculator.dart';
 import '../../shared/utils/time_utils.dart';
 import '../../shared/widgets/confetti_overlay.dart';
@@ -62,6 +63,7 @@ class _CompletionScreenState extends ConsumerState<CompletionScreen> {
           );
     _saveRecord();
     HapticUtils.complete();
+    SoundUtils.complete();
   }
 
   Future<void> _saveRecord() async {

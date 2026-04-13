@@ -10,6 +10,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/models/photo.dart';
 import '../../../core/models/puzzle_type.dart';
 import '../../../shared/utils/haptic_utils.dart';
+import '../../../shared/utils/sound_utils.dart';
 import '../../../shared/utils/image_utils.dart';
 import '../../../shared/utils/time_utils.dart';
 import '../../../shared/widgets/loading_overlay.dart';
@@ -110,6 +111,7 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
           localPos.dy >= ry &&
           localPos.dy <= ry + rh) {
         HapticUtils.snap();
+        SoundUtils.snap();
         setState(() {
           _foundIndices.add(i);
           _ripples.add(_TapRipple(
@@ -121,6 +123,7 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
         if (_foundIndices.length == _regions.length) {
           _timer?.cancel();
           HapticUtils.complete();
+          SoundUtils.complete();
           Future.delayed(
               const Duration(milliseconds: 600), _goToCompletion);
         }
@@ -130,6 +133,7 @@ class _SpotDifferenceScreenState extends State<SpotDifferenceScreen> {
 
     // Wrong tap
     HapticUtils.error();
+    SoundUtils.error();
   }
 
   void _goToCompletion({bool timeUp = false}) {

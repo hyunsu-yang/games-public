@@ -12,6 +12,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/models/photo.dart';
 import '../../../core/models/puzzle_type.dart';
 import '../../../shared/utils/haptic_utils.dart';
+import '../../../shared/utils/sound_utils.dart';
 import '../../../shared/utils/image_utils.dart';
 import '../../../shared/utils/time_utils.dart';
 import '../../../shared/widgets/loading_overlay.dart';
@@ -107,6 +108,7 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
 
   void _onPiecePickUp(_Piece piece, Offset localPos) {
     HapticUtils.pick();
+    SoundUtils.pick();
     setState(() {
       _dragging = piece;
       _dragOffset = localPos;
@@ -137,6 +139,7 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
     final dist = (localPos - targetOffset).distance;
     if (dist < AppSizes.pieceSnapThreshold * 2) {
       HapticUtils.snap();
+      SoundUtils.snap();
       setState(() {
         _dragging!
           ..offset = targetOffset
@@ -150,6 +153,7 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
     if (_allPlaced) {
       _timer?.cancel();
       HapticUtils.complete();
+      SoundUtils.complete();
       Future.delayed(const Duration(milliseconds: 600), _goToCompletion);
     }
 

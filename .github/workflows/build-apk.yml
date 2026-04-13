@@ -44,27 +44,27 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME:-manual}
           cp build/app/outputs/flutter-apk/app-release.apk \
-             build/app/outputs/flutter-apk/SnapPuzzle-${VERSION}.apk
+             build/app/outputs/flutter-apk/SeoaPuzzle-${VERSION}.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SnapPuzzle-APK
-          path: build/app/outputs/flutter-apk/SnapPuzzle-*.apk
+          name: SeoaPuzzle-APK
+          path: build/app/outputs/flutter-apk/SeoaPuzzle-*.apk
 
       # 태그 푸시일 때만 GitHub Release 생성
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          name: SnapPuzzle ${{ github.ref_name }}
+          name: SeoaPuzzle ${{ github.ref_name }}
           body: |
-            ## SnapPuzzle ${{ github.ref_name }}
+            ## SeoaPuzzle ${{ github.ref_name }}
 
             ### 설치 방법 (Android)
-            1. 아래 `SnapPuzzle-${{ github.ref_name }}.apk` 파일을 폰/패드에서 다운로드
+            1. 아래 `SeoaPuzzle-${{ github.ref_name }}.apk` 파일을 폰/패드에서 다운로드
             2. 설정 → 출처를 알 수 없는 앱 허용
             3. 다운로드한 APK 파일 열기 → 설치
-          files: build/app/outputs/flutter-apk/SnapPuzzle-*.apk
+          files: build/app/outputs/flutter-apk/SeoaPuzzle-*.apk
           draft: false
           prerelease: false

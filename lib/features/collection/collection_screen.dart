@@ -16,6 +16,33 @@ import 'collection_provider.dart';
 class CollectionScreen extends ConsumerWidget {
   const CollectionScreen({super.key});
 
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, AlbumEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.deleteAlbumTitle),
+        content: const Text(AppStrings.deleteAlbumMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(AppStrings.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+                foregroundColor: AppColors.error),
+            child: const Text(AppStrings.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await deleteAlbumEntry(entry);
+      ref.invalidate(albumProvider);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final albumAsync = ref.watch(albumProvider);
@@ -71,6 +98,8 @@ class CollectionScreen extends ConsumerWidget {
                     itemCount: entries.length,
                     itemBuilder: (_, i) => _AlbumCard(
                       entry: entries[i],
+                      onDelete: () => _confirmDelete(
+                          context, ref, entries[i]),
                     ),
                   );
                 },
@@ -84,15 +113,17 @@ class CollectionScreen extends ConsumerWidget {
 }
 
 class _AlbumCard extends StatelessWidget {
-  const _AlbumCard({required this.entry});
+  const _AlbumCard({required this.entry, required this.onDelete});
 
   final AlbumEntry entry;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final allDone = entry.allModesCompleted;
 
     return GestureDetector(
+      onLongPress: onDelete,
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(

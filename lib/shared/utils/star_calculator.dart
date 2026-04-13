@@ -12,6 +12,7 @@ abstract final class StarCalculator {
     Difficulty.easy: 120,
     Difficulty.medium: 240,
     Difficulty.hard: 420,
+    Difficulty.expert: 720,
   };
 
   static int calculate({
@@ -40,6 +41,7 @@ abstract final class StarCalculator {
       Difficulty.easy => 50,
       Difficulty.medium => 120,
       Difficulty.hard => 250,
+      Difficulty.expert => 500,
     };
     final parTime = _parTimes[difficulty]!;
 

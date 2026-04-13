@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
@@ -7,6 +8,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/constants/app_sizes.dart';
+
+/// Structural effects for spot-the-difference patches.
+enum _DiffEffect { mirror, shift, cloneFill, scaleUp }
+
+/// Candidate region scored by edge density for difference placement.
+typedef _RegionCandidate = ({int cx, int cy, int radius, double score});
 
 /// Image utilities: resize, crop, thumbnail, and tile slicing.
 ///
@@ -37,12 +44,9 @@ abstract final class ImageUtils {
       );
     }
 
-    // Auto brightness correction
-    image = img.adjustColor(image, brightness: 0.05);
-
     final outDir = Directory(srcPath).parent.path;
-    final outPath = p.join(outDir, '${_Uuid.short()}_norm.jpg');
-    File(outPath).writeAsBytesSync(img.encodeJpg(image, quality: 90));
+    final outPath = p.join(outDir, '${_Uuid.short()}_norm.png');
+    File(outPath).writeAsBytesSync(img.encodePng(image));
     return File(outPath);
   }
 
@@ -70,35 +74,37 @@ abstract final class ImageUtils {
     image = img.copyResize(image, width: size, height: size);
 
     final outDir = Directory(srcPath).parent.path;
-    final outPath = p.join(outDir, '${_Uuid.short()}_thumb.jpg');
-    File(outPath).writeAsBytesSync(img.encodeJpg(image, quality: 80));
+    final outPath = p.join(outDir, '${_Uuid.short()}_thumb.png');
+    File(outPath).writeAsBytesSync(img.encodePng(image));
     return File(outPath);
   }
 
   // ── Tile slicing ─────────────────────────────────────────────────────────
 
-  /// Slice [srcFile] into a [cols]×[rows] grid of image tiles.
-  /// Returns a row-major list of [Uint8List] JPEG bytes.
-  static Future<List<Uint8List>> sliceIntoTiles(
-      File srcFile, int cols, int rows) async {
-    return Isolate.run(() => _sliceTilesSync(srcFile.path, cols, rows));
+  /// Slice [srcFile] into a grid of image tiles.
+  ///
+  /// [gridSmall] and [gridLarge] are the two grid dimensions.
+  /// The smaller value is assigned to the image's shorter side,
+  /// the larger value to the longer side. This ensures the puzzle
+  /// matches the photo orientation (portrait or landscape).
+  ///
+  /// For square grids (slide/rotate), pass the same value for both.
+  static Future<SlicedTilesResult> sliceIntoTiles(
+      File srcFile, int gridSmall, int gridLarge) async {
+    return Isolate.run(
+        () => _sliceTilesSync(srcFile.path, gridSmall, gridLarge));
   }
 
-  static List<Uint8List> _sliceTilesSync(
-      String srcPath, int cols, int rows) {
+  static SlicedTilesResult _sliceTilesSync(
+      String srcPath, int gridSmall, int gridLarge) {
     final bytes = File(srcPath).readAsBytesSync();
-    var image = img.decodeImage(bytes);
+    final image = img.decodeImage(bytes);
     if (image == null) throw Exception('Cannot decode image: $srcPath');
 
-    // Ensure square crop
-    final minDim = image.width < image.height ? image.width : image.height;
-    image = img.copyCrop(
-      image,
-      x: (image.width - minDim) ~/ 2,
-      y: (image.height - minDim) ~/ 2,
-      width: minDim,
-      height: minDim,
-    );
+    // Assign grid dimensions based on image orientation
+    final bool isLandscape = image.width > image.height;
+    final int cols = isLandscape ? gridLarge : gridSmall;
+    final int rows = isLandscape ? gridSmall : gridLarge;
 
     final tileW = image.width ~/ cols;
     final tileH = image.height ~/ rows;
@@ -106,25 +112,37 @@ abstract final class ImageUtils {
 
     for (var row = 0; row < rows; row++) {
       for (var col = 0; col < cols; col++) {
-        final tile = img.copyCrop(
-          image,
-          x: col * tileW,
-          y: row * tileH,
+        final tile = img.Image(
           width: tileW,
           height: tileH,
+          format: image.format,
+          numChannels: image.numChannels,
         );
-        tiles.add(Uint8List.fromList(img.encodeJpg(tile, quality: 85)));
+        for (var y = 0; y < tileH; y++) {
+          for (var x = 0; x < tileW; x++) {
+            tile.setPixel(
+                x, y, image.getPixel(col * tileW + x, row * tileH + y));
+          }
+        }
+        tiles.add(Uint8List.fromList(img.encodePng(tile)));
       }
     }
 
-    return tiles;
+    return SlicedTilesResult(
+      tiles: tiles,
+      cols: cols,
+      rows: rows,
+      imageWidth: image.width,
+      imageHeight: image.height,
+    );
   }
 
   // ── Spot-the-difference transformation ──────────────────────────────────
 
-  /// Produce a modified version of [srcFile] with [count] differences applied.
-  /// Returns the modified image bytes and a list of difference region rects
-  /// as [_DiffRegion] (encoded as int lists: [x, y, w, h]).
+  /// Produce a modified version of [srcFile] with [count] structural differences.
+  /// Uses Sobel edge detection to place differences on visually interesting
+  /// regions, then applies object-level modifications (mirror, shift,
+  /// clone-fill, blur). Returns regions as [cx, cy, radius].
   static Future<SpotDiffResult> generateSpotDifferences(
       File srcFile, int count) async {
     return Isolate.run(() => _genDiffSync(srcFile.path, count));
@@ -136,7 +154,8 @@ abstract final class ImageUtils {
     if (original == null) throw Exception('Cannot decode image: $srcPath');
 
     // Square crop
-    final minDim = original.width < original.height ? original.width : original.height;
+    final minDim =
+        original.width < original.height ? original.width : original.height;
     original = img.copyCrop(
       original,
       x: (original.width - minDim) ~/ 2,
@@ -146,59 +165,199 @@ abstract final class ImageUtils {
     );
 
     final modified = img.Image.from(original);
+    final rng = Random();
+    final baseRadius = original.width ~/ 12;
+
+    // Find regions with high edge density (objects / details)
+    final selected =
+        _findInterestingRegions(original, count, baseRadius, rng);
+
     final regions = <List<int>>[];
-    final rng = img.ExternalRandom(42);
-
-    final patchSize = original.width ~/ 6; // ~1/6 of image width per patch
-
-    for (var i = 0; i < count; i++) {
-      // Pick a region that doesn't overlap previous ones
-      int x, y;
-      var attempts = 0;
-      do {
-        x = (rng.nextDouble() * (original.width - patchSize)).toInt();
-        y = (rng.nextDouble() * (original.height - patchSize)).toInt();
-        attempts++;
-      } while (_overlaps(regions, x, y, patchSize) && attempts < 30);
-
-      regions.add([x, y, patchSize, patchSize]);
-
-      // Apply a colour-inversion transform to this patch
-      for (var py = y; py < y + patchSize; py++) {
-        for (var px = x; px < x + patchSize; px++) {
-          final pixel = modified.getPixel(px, py);
-          modified.setPixelRgba(
-            px,
-            py,
-            255 - pixel.r.toInt(),
-            255 - pixel.g.toInt(),
-            255 - pixel.b.toInt(),
-            pixel.a.toInt(),
-          );
-        }
-      }
+    for (final c in selected) {
+      regions.add([c.cx, c.cy, c.radius]);
+      final effect =
+          _DiffEffect.values[rng.nextInt(_DiffEffect.values.length)];
+      _applyStructuralEffect(
+          original, modified, c.cx, c.cy, c.radius, effect, rng);
     }
 
     return SpotDiffResult(
-      originalBytes:
-          Uint8List.fromList(img.encodeJpg(original, quality: 90)),
-      modifiedBytes:
-          Uint8List.fromList(img.encodeJpg(modified, quality: 90)),
+      originalBytes: Uint8List.fromList(img.encodePng(original)),
+      modifiedBytes: Uint8List.fromList(img.encodePng(modified)),
       differenceRegions: regions,
+      imageWidth: original.width,
+      imageHeight: original.height,
     );
   }
 
-  static bool _overlaps(List<List<int>> regions, int x, int y, int size) {
-    for (final r in regions) {
-      if (x < r[0] + r[2] &&
-          x + size > r[0] &&
-          y < r[1] + r[3] &&
-          y + size > r[1]) {
-        return true;
+  /// Score candidate grid positions by Sobel edge density,
+  /// then return top [count] non-overlapping regions.
+  static List<_RegionCandidate> _findInterestingRegions(
+      img.Image image, int count, int baseRadius, Random rng) {
+    final step = baseRadius;
+    final margin = baseRadius;
+    final candidates = <_RegionCandidate>[];
+
+    for (var cy = margin; cy < image.height - margin; cy += step) {
+      for (var cx = margin; cx < image.width - margin; cx += step) {
+        final radius =
+            baseRadius + rng.nextInt(baseRadius ~/ 3 + 1) - baseRadius ~/ 6;
+        final score = _edgeDensity(image, cx, cy, radius);
+        candidates.add((cx: cx, cy: cy, radius: radius, score: score));
       }
     }
-    return false;
+
+    // Highest edge density first
+    candidates.sort((a, b) => b.score.compareTo(a.score));
+
+    // Greedy non-overlapping selection
+    final selected = <_RegionCandidate>[];
+    for (final c in candidates) {
+      if (selected.length >= count) break;
+      bool overlaps = false;
+      for (final s in selected) {
+        final dx = c.cx - s.cx;
+        final dy = c.cy - s.cy;
+        final minDist = c.radius + s.radius;
+        if (dx * dx + dy * dy < minDist * minDist) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps) selected.add(c);
+    }
+
+    return selected;
   }
+
+  /// Average Sobel gradient magnitude in a circular area (sampled every 3px).
+  static double _edgeDensity(img.Image image, int cx, int cy, int radius) {
+    double total = 0;
+    int cnt = 0;
+    final rSq = radius * radius;
+
+    for (var y = cy - radius; y <= cy + radius; y += 3) {
+      for (var x = cx - radius; x <= cx + radius; x += 3) {
+        if (x < 1 || x >= image.width - 1 ||
+            y < 1 || y >= image.height - 1) {
+          continue;
+        }
+        final dx = x - cx;
+        final dy = y - cy;
+        if (dx * dx + dy * dy > rSq) continue;
+
+        final gx = _grayAt(image, x + 1, y) - _grayAt(image, x - 1, y);
+        final gy = _grayAt(image, x, y + 1) - _grayAt(image, x, y - 1);
+        total += sqrt(gx * gx + gy * gy);
+        cnt++;
+      }
+    }
+    return cnt > 0 ? total / cnt : 0;
+  }
+
+  static double _grayAt(img.Image image, int x, int y) {
+    final p = image.getPixel(x, y);
+    return p.r * 0.299 + p.g * 0.587 + p.b * 0.114;
+  }
+
+  /// Apply a structural modification inside a feathered circle.
+  /// Reads source pixels from [original], writes to [modified].
+  static void _applyStructuralEffect(
+      img.Image original,
+      img.Image modified,
+      int cx,
+      int cy,
+      int radius,
+      _DiffEffect effect,
+      Random rng) {
+    final innerR = radius * 0.6;
+    final rSq = radius * radius;
+    final iSq = innerR * innerR;
+    final featherW = radius - innerR;
+
+    final x0 = (cx - radius).clamp(0, original.width - 1);
+    final y0 = (cy - radius).clamp(0, original.height - 1);
+    final x1 = (cx + radius).clamp(0, original.width - 1);
+    final y1 = (cy + radius).clamp(0, original.height - 1);
+
+    // Pre-compute per-effect parameters
+    int shiftX = 0, shiftY = 0;
+    int cloneCx = cx, cloneCy = cy;
+
+    if (effect == _DiffEffect.shift) {
+      final angle = rng.nextDouble() * 2 * pi;
+      final dist = radius * (0.15 + rng.nextDouble() * 0.1);
+      shiftX = (cos(angle) * dist).round();
+      shiftY = (sin(angle) * dist).round();
+    } else if (effect == _DiffEffect.cloneFill) {
+      final angle = rng.nextDouble() * 2 * pi;
+      cloneCx = (cx + cos(angle) * radius * 2.5)
+          .round()
+          .clamp(radius, original.width - radius - 1);
+      cloneCy = (cy + sin(angle) * radius * 2.5)
+          .round()
+          .clamp(radius, original.height - radius - 1);
+    }
+
+    for (var py = y0; py <= y1; py++) {
+      for (var px = x0; px <= x1; px++) {
+        final dx = px - cx;
+        final dy = py - cy;
+        final distSq = dx * dx + dy * dy;
+        if (distSq > rSq) continue;
+
+        // Feather: 1.0 in inner core, fading to 0.0 at edge
+        final double blend;
+        if (distSq <= iSq) {
+          blend = 1.0;
+        } else {
+          blend = (radius - sqrt(distSq.toDouble())) / featherW;
+        }
+
+        final orig = original.getPixel(px, py);
+        int nr, ng, nb;
+
+        switch (effect) {
+          case _DiffEffect.mirror:
+            final mx = (2 * cx - px).clamp(0, original.width - 1);
+            final src = original.getPixel(mx, py);
+            nr = _lerpInt(orig.r.toInt(), src.r.toInt(), blend);
+            ng = _lerpInt(orig.g.toInt(), src.g.toInt(), blend);
+            nb = _lerpInt(orig.b.toInt(), src.b.toInt(), blend);
+
+          case _DiffEffect.shift:
+            final sx = (px - shiftX).clamp(0, original.width - 1);
+            final sy = (py - shiftY).clamp(0, original.height - 1);
+            final src = original.getPixel(sx, sy);
+            nr = _lerpInt(orig.r.toInt(), src.r.toInt(), blend);
+            ng = _lerpInt(orig.g.toInt(), src.g.toInt(), blend);
+            nb = _lerpInt(orig.b.toInt(), src.b.toInt(), blend);
+
+          case _DiffEffect.cloneFill:
+            final sx = (cloneCx + dx).clamp(0, original.width - 1);
+            final sy = (cloneCy + dy).clamp(0, original.height - 1);
+            final src = original.getPixel(sx, sy);
+            nr = _lerpInt(orig.r.toInt(), src.r.toInt(), blend);
+            ng = _lerpInt(orig.g.toInt(), src.g.toInt(), blend);
+            nb = _lerpInt(orig.b.toInt(), src.b.toInt(), blend);
+
+          case _DiffEffect.scaleUp:
+            // ~15% zoom — same object, slightly larger
+            final sx = (cx + dx / 1.15).round().clamp(0, original.width - 1);
+            final sy = (cy + dy / 1.15).round().clamp(0, original.height - 1);
+            final src = original.getPixel(sx, sy);
+            nr = _lerpInt(orig.r.toInt(), src.r.toInt(), blend);
+            ng = _lerpInt(orig.g.toInt(), src.g.toInt(), blend);
+            nb = _lerpInt(orig.b.toInt(), src.b.toInt(), blend);
+        }
+
+        modified.setPixelRgba(px, py, nr, ng, nb, orig.a.toInt());
+      }
+    }
+  }
+
+  static int _lerpInt(int a, int b, double t) =>
+      (a + (b - a) * t).round().clamp(0, 255);
 
   // ── File helpers ─────────────────────────────────────────────────────────
 
@@ -215,19 +374,44 @@ abstract final class ImageUtils {
   }
 }
 
+/// Result of [ImageUtils.sliceIntoTiles].
+class SlicedTilesResult {
+  const SlicedTilesResult({
+    required this.tiles,
+    required this.cols,
+    required this.rows,
+    required this.imageWidth,
+    required this.imageHeight,
+  });
+
+  final List<Uint8List> tiles;
+  final int cols;
+  final int rows;
+  final int imageWidth;
+  final int imageHeight;
+
+  double get aspectRatio => imageWidth / imageHeight;
+}
+
 /// Result of [ImageUtils.generateSpotDifferences].
 class SpotDiffResult {
   const SpotDiffResult({
     required this.originalBytes,
     required this.modifiedBytes,
     required this.differenceRegions,
+    required this.imageWidth,
+    required this.imageHeight,
   });
 
   final Uint8List originalBytes;
   final Uint8List modifiedBytes;
 
-  /// Row-major list of [x, y, width, height] int lists (one per difference).
+  /// List of [cx, cy, radius] int lists (one per difference).
   final List<List<int>> differenceRegions;
+
+  /// Actual pixel dimensions of the processed image (regions are in this coordinate space).
+  final int imageWidth;
+  final int imageHeight;
 }
 
 /// Tiny non-crypto UUID helper for sync isolate code (no async allowed).

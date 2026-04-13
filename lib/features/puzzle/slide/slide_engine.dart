@@ -1,21 +1,18 @@
 import 'dart:math';
+import 'package:flutter/painting.dart';
 
-import '../../../core/models/puzzle_type.dart';
-
-/// Slide-puzzle engine: generates solvable shuffled boards
-/// and validates moves.
+/// Slide-puzzle engine (15-puzzle style).
 ///
-/// The empty tile is represented by index 0; numbered tiles 1..N.
+/// Tiles are numbered 1..N. The empty cell is represented by 0.
+/// Solved state: [1, 2, 3, ..., N, 0] (empty at bottom-right).
 class SlideEngine {
-  SlideEngine({required this.difficulty})
-      : grid = difficulty.slideGrid,
-        tileCount = difficulty.slideTileCount;
+  SlideEngine({required this.cols, required this.rows});
 
-  final Difficulty difficulty;
-  final int grid;
-  final int tileCount;
+  final int cols;
+  final int rows;
+  int get totalCells => cols * rows;
 
-  late List<int> _tiles; // length = grid*grid; 0 = empty
+  late List<int> _tiles;
   int _emptyIndex = 0;
   int _moveCount = 0;
 
@@ -23,13 +20,12 @@ class SlideEngine {
   int get moveCount => _moveCount;
   int get emptyIndex => _emptyIndex;
 
-  /// Returns a freshly shuffled, solvable board.
+  /// Goal state: [1, 2, ..., N, 0]
   void shuffle() {
-    _tiles = List.generate(grid * grid, (i) => i); // 0..grid²-1
-    _emptyIndex = grid * grid - 1;
+    _tiles = List.generate(totalCells, (i) => (i + 1) % totalCells);
+    _emptyIndex = totalCells - 1;
 
     final rng = Random();
-    // Shuffle by making 1000 random valid moves (always solvable).
     for (var i = 0; i < 1000; i++) {
       final neighbors = _validMoves();
       if (neighbors.isEmpty) continue;
@@ -40,15 +36,14 @@ class SlideEngine {
     _moveCount = 0;
   }
 
-  /// Returns the linear indices of tiles that can slide into the empty cell.
   List<int> _validMoves() {
     final moves = <int>[];
-    final row = _emptyIndex ~/ grid;
-    final col = _emptyIndex % grid;
-    if (row > 0) moves.add(_emptyIndex - grid); // above
-    if (row < grid - 1) moves.add(_emptyIndex + grid); // below
-    if (col > 0) moves.add(_emptyIndex - 1); // left
-    if (col < grid - 1) moves.add(_emptyIndex + 1); // right
+    final row = _emptyIndex ~/ cols;
+    final col = _emptyIndex % cols;
+    if (row > 0) moves.add(_emptyIndex - cols);
+    if (row < rows - 1) moves.add(_emptyIndex + cols);
+    if (col > 0) moves.add(_emptyIndex - 1);
+    if (col < cols - 1) moves.add(_emptyIndex + 1);
     return moves;
   }
 
@@ -58,24 +53,49 @@ class SlideEngine {
     _tiles[b] = tmp;
   }
 
-  /// Attempts to slide the tile at [tileIndex] into the empty space.
-  /// Returns true if the move was legal.
-  bool move(int tileIndex) {
-    if (!_validMoves().contains(tileIndex)) return false;
-    _swap(_emptyIndex, tileIndex);
-    _emptyIndex = tileIndex;
+  /// Check if tile at [index] is adjacent to the empty cell.
+  bool canMove(int index) => _validMoves().contains(index);
+
+  /// Move the tile at [index] into the empty space.
+  bool move(int index) {
+    if (!canMove(index)) return false;
+    _swap(_emptyIndex, index);
+    _emptyIndex = index;
     _moveCount++;
     return true;
   }
 
-  /// True when every numbered tile is in its goal position.
-  bool get isSolved {
-    for (var i = 0; i < _tiles.length; i++) {
-      if (_tiles[i] != i) return false;
+  /// Try to move a tile in [direction] relative to the empty cell.
+  /// Returns true if successful.
+  bool moveDirection(AxisDirection direction) {
+    final row = _emptyIndex ~/ cols;
+    final col = _emptyIndex % cols;
+
+    // The tile that should slide INTO the empty space
+    int? target;
+    switch (direction) {
+      case AxisDirection.up:
+        if (row < rows - 1) target = _emptyIndex + cols;
+        break;
+      case AxisDirection.down:
+        if (row > 0) target = _emptyIndex - cols;
+        break;
+      case AxisDirection.left:
+        if (col < cols - 1) target = _emptyIndex + 1;
+        break;
+      case AxisDirection.right:
+        if (col > 0) target = _emptyIndex - 1;
+        break;
     }
-    return true;
+
+    if (target == null) return false;
+    return move(target);
   }
 
-  /// Goal position for tile value [value] (0 = empty cell goes last).
-  int goalIndexOf(int value) => value;
+  bool get isSolved {
+    for (var i = 0; i < totalCells - 1; i++) {
+      if (_tiles[i] != i + 1) return false;
+    }
+    return _tiles[totalCells - 1] == 0;
+  }
 }

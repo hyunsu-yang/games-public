@@ -35,12 +35,14 @@ class _DifficultySelectionScreenState
     Difficulty.easy: AppStrings.easyDesc,
     Difficulty.medium: AppStrings.mediumDesc,
     Difficulty.hard: AppStrings.hardDesc,
+    Difficulty.expert: AppStrings.expertDesc,
   };
 
   static const _colors = {
     Difficulty.easy: AppColors.easy,
     Difficulty.medium: AppColors.medium,
     Difficulty.hard: AppColors.hard,
+    Difficulty.expert: AppColors.expert,
   };
 
   void _start() {

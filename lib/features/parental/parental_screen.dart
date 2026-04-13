@@ -242,7 +242,7 @@ class _SettingsBody extends ConsumerWidget {
   }
 
   Future<void> _updateSettings(WidgetRef ref, AppSettings settings) async {
-    await ref.read(settingsNotifierProvider.notifier).update(settings);
+    await ref.read(settingsNotifierProvider.notifier).updateSettings(settings);
   }
 
   String _formatDuration(int seconds) {

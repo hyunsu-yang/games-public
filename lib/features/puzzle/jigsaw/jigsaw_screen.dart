@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:ui' as ui;
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
@@ -12,7 +12,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/models/photo.dart';
 import '../../../core/models/puzzle_type.dart';
 import '../../../shared/utils/haptic_utils.dart';
-import '../../../shared/utils/image_utils.dart';
+import '../../../shared/utils/jigsaw_clipper.dart';
 import '../../../shared/utils/time_utils.dart';
 import '../../../shared/widgets/loading_overlay.dart';
 import '../completion_screen.dart';
@@ -33,15 +33,16 @@ class JigsawScreen extends ConsumerStatefulWidget {
 
 class _JigsawScreenState extends ConsumerState<JigsawScreen> {
   List<_Piece>? _pieces;
+  Uint8List? _imageBytes;
   bool _loading = true;
   int _elapsedSeconds = 0;
   int _hintsUsed = 0;
   bool _showHint = false;
   Timer? _timer;
-
-  // Drag state
-  _Piece? _dragging;
-  Offset _dragOffset = Offset.zero;
+  double _imageAspectRatio = 1.0;
+  JigsawEdgeMap? _edgeMap;
+  int get _cols => _edgeMap?.cols ?? 1;
+  int get _rows => _edgeMap?.rows ?? 1;
 
   @override
   void initState() {
@@ -56,39 +57,38 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
   }
 
   Future<void> _initPuzzle() async {
-    final cols = widget.difficulty.jigsawCols;
-    final rows = widget.difficulty.jigsawRows;
+    final file = File(widget.photo.filePath);
+    final bytes = await file.readAsBytes();
 
-    final tiles = await ImageUtils.sliceIntoTiles(
-      File(widget.photo.filePath),
-      cols,
-      rows,
-    );
+    // Get image dimensions via Flutter's codec (no heavy re-encode)
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final imgW = frame.image.width;
+    final imgH = frame.image.height;
+    frame.image.dispose();
+    final isLandscape = imgW > imgH;
 
-    // Lay out pieces in a scatter zone below the board
+    final cols = isLandscape
+        ? widget.difficulty.jigsawRows
+        : widget.difficulty.jigsawCols;
+    final rows = isLandscape
+        ? widget.difficulty.jigsawCols
+        : widget.difficulty.jigsawRows;
+
+    final edgeMap = JigsawEdgeMap(cols: cols, rows: rows);
     final pieces = <_Piece>[];
-    final rng = DateTime.now().millisecondsSinceEpoch;
-
-    for (var i = 0; i < tiles.length; i++) {
-      final col = i % cols;
-      final row = i ~/ cols;
-      // Simple random scatter (seeded by timestamp for variety)
-      final sx = ((i * 97 + rng) % 280).toDouble();
-      final sy = 20.0 + (i * 53 % 100).toDouble();
-      pieces.add(_Piece(
-        index: i,
-        bytes: tiles[i],
-        col: col,
-        row: row,
-        offset: Offset(sx, sy),
-        rotationDeg: widget.difficulty.jigsawAllowRotation
-            ? [0, 90, 180, 270][(i * 3 + rng) % 4]
-            : 0,
-      ));
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        pieces.add(_Piece(col: c, row: r));
+      }
     }
+    pieces.shuffle();
 
     if (mounted) {
       setState(() {
+        _imageBytes = bytes;
+        _imageAspectRatio = imgW / imgH;
+        _edgeMap = edgeMap;
         _pieces = pieces;
         _loading = false;
       });
@@ -102,58 +102,21 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
     });
   }
 
-  bool get _allPlaced =>
-      _pieces?.every((p) => p.isPlaced) ?? false;
+  bool get _allPlaced => _pieces?.every((p) => p.isPlaced) ?? false;
 
-  void _onPiecePickUp(_Piece piece, Offset localPos) {
-    HapticUtils.pick();
-    setState(() {
-      _dragging = piece;
-      _dragOffset = localPos;
-      // Bring to top
-      _pieces!
-        ..remove(piece)
-        ..add(piece);
-    });
-  }
-
-  void _onPieceDrop(Offset globalPos) {
-    if (_dragging == null || _pieces == null) return;
-
-    // Convert global pos to board-local
-    final boardBox =
-        _boardKey.currentContext?.findRenderObject() as RenderBox?;
-    if (boardBox == null) return;
-    final localPos = boardBox.globalToLocal(globalPos) - _dragOffset;
-
-    final board = boardBox.size;
-    final tileW = board.width / widget.difficulty.jigsawCols;
-    final tileH = board.height / widget.difficulty.jigsawRows;
-    final targetOffset = Offset(
-      _dragging!.col * tileW,
-      _dragging!.row * tileH,
-    );
-
-    final dist = (localPos - targetOffset).distance;
-    if (dist < AppSizes.pieceSnapThreshold * 2) {
-      HapticUtils.snap();
-      setState(() {
-        _dragging!
-          ..offset = targetOffset
-          ..isPlaced = true
-          ..rotationDeg = 0;
-      });
-    } else {
-      setState(() => _dragging!.offset = localPos);
-    }
-
+  void _onPiecePlaced(_Piece piece) {
+    HapticUtils.snap();
+    setState(() => piece.isPlaced = true);
     if (_allPlaced) {
       _timer?.cancel();
       HapticUtils.complete();
       Future.delayed(const Duration(milliseconds: 600), _goToCompletion);
     }
+  }
 
-    setState(() => _dragging = null);
+  void _onPieceUnplaced(_Piece piece) {
+    HapticUtils.pick();
+    setState(() => piece.isPlaced = false);
   }
 
   void _useHint() {
@@ -180,31 +143,25 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
     );
   }
 
-  String _formatTime() => TimeUtils.mmss(_elapsedSeconds);
-
-  final _boardKey = GlobalKey();
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-            '${AppStrings.jigsawMode} — ${widget.difficulty.koreanName}'),
+        title:
+            Text('${AppStrings.jigsawMode} — ${widget.difficulty.koreanName}'),
         actions: [
-          // Timer
           Center(
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppSizes.md),
+              padding: const EdgeInsets.symmetric(horizontal: AppSizes.md),
               child: Text(
-                _formatTime(),
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w700),
+                TimeUtils.mmss(_elapsedSeconds),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
             ),
           ),
-          // Hint button (only for easy/medium)
-          if (widget.difficulty != Difficulty.hard)
+          if (widget.difficulty != Difficulty.hard &&
+              widget.difficulty != Difficulty.expert)
             IconButton(
               icon: const Icon(Icons.lightbulb_outline_rounded),
               tooltip: AppStrings.hint,
@@ -217,35 +174,38 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
           : Column(
               children: [
                 Expanded(
-                    flex: 3,
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSizes.boardPadding),
+                  flex: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSizes.boardPadding),
+                    child: Center(
                       child: AspectRatio(
-                        aspectRatio: widget.difficulty.jigsawCols /
-                            widget.difficulty.jigsawRows,
+                        aspectRatio: _imageAspectRatio,
                         child: _JigsawBoard(
-                          boardKey: _boardKey,
-                          photo: widget.photo,
-                          difficulty: widget.difficulty,
-                          pieces: _pieces ?? [],
+                          imageBytes: _imageBytes!,
+                          cols: _cols,
+                          rows: _rows,
+                          edgeMap: _edgeMap!,
+                          pieces: _pieces!,
                           showHint: _showHint,
-                          onPickUp: _onPiecePickUp,
-                          onDrop: _onPieceDrop,
+                          photo: widget.photo,
+                          onPiecePlaced: _onPiecePlaced,
+                          onPieceUnplaced: _onPieceUnplaced,
                         ),
                       ),
                     ),
                   ),
-
-                Expanded(
-                    flex: 2,
-                    child: _PieceTray(
-                      pieces: _pieces ?? [],
-                      tileW: 80,
-                      tileH: 80,
-                      onPickUp: _onPiecePickUp,
-                      onDrop: _onPieceDrop,
-                    ),
+                ),
+                Container(
+                  height: 130,
+                  color: AppColors.surfaceVariant,
+                  child: _PieceTray(
+                    imageBytes: _imageBytes!,
+                    cols: _cols,
+                    rows: _rows,
+                    edgeMap: _edgeMap!,
+                    pieces: _pieces!.where((p) => !p.isPlaced).toList(),
                   ),
+                ),
               ],
             ),
     );
@@ -255,172 +215,232 @@ class _JigsawScreenState extends ConsumerState<JigsawScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _Piece {
-  _Piece({
-    required this.index,
-    required this.bytes,
-    required this.col,
-    required this.row,
-    required this.offset,
-    this.rotationDeg = 0,
-    this.isPlaced = false,
-  });
-
-  final int index;
-  final Uint8List bytes;
+  _Piece({required this.col, required this.row});
   final int col;
   final int row;
-  Offset offset;
-  int rotationDeg;
-  bool isPlaced;
+  bool isPlaced = false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Renders a single jigsaw piece from the full image
+
+class _PieceView extends StatelessWidget {
+  const _PieceView({
+    required this.imageBytes,
+    required this.col,
+    required this.row,
+    required this.cols,
+    required this.rows,
+    required this.edgeMap,
+    required this.displayWidth,
+    required this.displayHeight,
+  });
+
+  final Uint8List imageBytes;
+  final int col, row, cols, rows;
+  final JigsawEdgeMap edgeMap;
+  final double displayWidth;
+  final double displayHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    // Cell size within the full board
+    final cellW = displayWidth;
+    final cellH = displayHeight;
+
+    // Tab overflow padding
+    final overflowX = cellW * kTabOverflow;
+    final overflowY = cellH * kTabOverflow;
+
+    // Padded piece size (cell + overflow on each side)
+    final pieceW = cellW + overflowX * 2;
+    final pieceH = cellH + overflowY * 2;
+
+    // Full board size
+    final boardW = cellW * cols;
+    final boardH = cellH * rows;
+
+    final clipper = edgeMap.clipperFor(row, col,
+        padding: EdgeInsets.fromLTRB(overflowX, overflowY, overflowX, overflowY));
+
+    return SizedBox(
+      width: pieceW,
+      height: pieceH,
+      child: ClipPath(
+        clipper: clipper,
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          maxWidth: boardW,
+          maxHeight: boardH,
+          child: Transform.translate(
+            offset: Offset(
+              -(col * cellW - overflowX),
+              -(row * cellH - overflowY),
+            ),
+            child: Image.memory(imageBytes,
+                width: boardW, height: boardH, fit: BoxFit.fill),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _JigsawBoard extends StatelessWidget {
   const _JigsawBoard({
-    required this.boardKey,
-    required this.photo,
-    required this.difficulty,
+    required this.imageBytes,
+    required this.cols,
+    required this.rows,
+    required this.edgeMap,
     required this.pieces,
     required this.showHint,
-    required this.onPickUp,
-    required this.onDrop,
+    required this.photo,
+    required this.onPiecePlaced,
+    required this.onPieceUnplaced,
   });
 
-  final GlobalKey boardKey;
-  final Photo photo;
-  final Difficulty difficulty;
+  final Uint8List imageBytes;
+  final int cols, rows;
+  final JigsawEdgeMap edgeMap;
   final List<_Piece> pieces;
   final bool showHint;
-  final void Function(_Piece, Offset) onPickUp;
-  final void Function(Offset) onDrop;
+  final Photo photo;
+  final void Function(_Piece) onPiecePlaced;
+  final void Function(_Piece) onPieceUnplaced;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      key: boardKey,
       decoration: BoxDecoration(
         color: AppColors.tileBackground,
         borderRadius: BorderRadius.circular(AppSizes.radiusMd),
         border: Border.all(color: AppColors.tileBorder, width: 2),
       ),
-      child: Stack(
-        children: [
-          if (showHint)
-            Opacity(
-              opacity: 0.25,
-              child: Image.file(
-                File(photo.filePath),
-                fit: BoxFit.fill,
-                width: double.infinity,
-                height: double.infinity,
-              ),
-            ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd - 1),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final cellW = constraints.maxWidth / cols;
+          final cellH = constraints.maxHeight / rows;
 
-          if (difficulty.jigsawShowGuide)
-            CustomPaint(
-              painter: _GridPainter(
-                cols: difficulty.jigsawCols,
-                rows: difficulty.jigsawRows,
-              ),
-              child: const SizedBox.expand(),
-            ),
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Hint: show full image faintly
+              if (showHint)
+                Opacity(
+                  opacity: 0.25,
+                  child: Image.file(File(photo.filePath),
+                      fit: BoxFit.fill,
+                      width: double.infinity,
+                      height: double.infinity),
+                ),
 
-          ...pieces
-              .where((p) => p.isPlaced)
-              .map((p) => _PlacedPiece(piece: p)),
-        ],
+              // Cells: outlines for empty, pieces for placed
+              for (var r = 0; r < rows; r++)
+                for (var c = 0; c < cols; c++)
+                  _BoardCell(
+                    col: c,
+                    row: r,
+                    cellW: cellW,
+                    cellH: cellH,
+                    cols: cols,
+                    rows: rows,
+                    imageBytes: imageBytes,
+                    edgeMap: edgeMap,
+                    pieces: pieces,
+                    onPiecePlaced: onPiecePlaced,
+                    onPieceUnplaced: onPieceUnplaced,
+                  ),
+            ],
+          );
+        }),
       ),
     );
   }
 }
 
-class _PlacedPiece extends StatelessWidget {
-  const _PlacedPiece({required this.piece});
-  final _Piece piece;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: piece.offset.dx,
-      top: piece.offset.dy,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.pieceCorrect, width: 2),
-        ),
-        child: Image.memory(piece.bytes, fit: BoxFit.fill),
-      ),
-    );
-  }
-}
-
-class _GridPainter extends CustomPainter {
-  const _GridPainter({required this.cols, required this.rows});
-  final int cols;
-  final int rows;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.tileBorder.withAlpha(100)
-      ..strokeWidth = 1;
-    for (var c = 1; c < cols; c++) {
-      final x = size.width * c / cols;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (var r = 1; r < rows; r++) {
-      final y = size.height * r / rows;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_GridPainter old) =>
-      old.cols != cols || old.rows != rows;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PieceTray extends StatelessWidget {
-  const _PieceTray({
+class _BoardCell extends StatelessWidget {
+  const _BoardCell({
+    required this.col,
+    required this.row,
+    required this.cellW,
+    required this.cellH,
+    required this.cols,
+    required this.rows,
+    required this.imageBytes,
+    required this.edgeMap,
     required this.pieces,
-    required this.tileW,
-    required this.tileH,
-    required this.onPickUp,
-    required this.onDrop,
+    required this.onPiecePlaced,
+    required this.onPieceUnplaced,
   });
 
+  final int col, row, cols, rows;
+  final double cellW, cellH;
+  final Uint8List imageBytes;
+  final JigsawEdgeMap edgeMap;
   final List<_Piece> pieces;
-  final double tileW;
-  final double tileH;
-  final void Function(_Piece, Offset) onPickUp;
-  final void Function(Offset) onDrop;
+  final void Function(_Piece) onPiecePlaced;
+  final void Function(_Piece) onPieceUnplaced;
 
   @override
   Widget build(BuildContext context) {
-    final unplaced = pieces.where((p) => !p.isPlaced).toList();
-    return Container(
-      color: AppColors.surfaceVariant,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.all(AppSizes.sm),
-        itemCount: unplaced.length,
-        itemBuilder: (_, i) {
-          final piece = unplaced[i];
-          return Padding(
-            padding: const EdgeInsets.all(AppSizes.xs),
-            child: Draggable<_Piece>(
-              data: piece,
-              feedback: _DraggingPiece(piece: piece, w: tileW, h: tileH),
-              childWhenDragging: Opacity(
-                opacity: 0.3,
-                child: _TrayPiece(piece: piece, w: tileW, h: tileH),
-              ),
-              onDragEnd: (details) => onDrop(details.offset),
-              child: GestureDetector(
-                onTapDown: (d) => onPickUp(piece, d.localPosition),
-                child: _TrayPiece(piece: piece, w: tileW, h: tileH),
-              ),
+    final overflowX = cellW * kTabOverflow;
+    final overflowY = cellH * kTabOverflow;
+    final placed = pieces.where((p) => p.isPlaced && p.col == col && p.row == row);
+
+    if (placed.isNotEmpty) {
+      final piece = placed.first;
+      return Positioned(
+        left: col * cellW - overflowX,
+        top: row * cellH - overflowY,
+        child: Draggable<_Piece>(
+          data: piece,
+          onDragStarted: () => onPieceUnplaced(piece),
+          feedback: SizedBox(
+            width: cellW + overflowX * 2,
+            height: cellH + overflowY * 2,
+            child: _PieceView(
+              imageBytes: imageBytes,
+              col: col, row: row, cols: cols, rows: rows,
+              edgeMap: edgeMap,
+              displayWidth: cellW, displayHeight: cellH,
+            ),
+          ),
+          childWhenDragging: SizedBox(
+            width: cellW + overflowX * 2,
+            height: cellH + overflowY * 2,
+          ),
+          child: _PieceView(
+            imageBytes: imageBytes,
+            col: col, row: row, cols: cols, rows: rows,
+            edgeMap: edgeMap,
+            displayWidth: cellW, displayHeight: cellH,
+          ),
+        ),
+      );
+    }
+
+    // Empty cell: show jigsaw outline + DragTarget
+    return Positioned(
+      left: col * cellW - overflowX,
+      top: row * cellH - overflowY,
+      width: cellW + overflowX * 2,
+      height: cellH + overflowY * 2,
+      child: DragTarget<_Piece>(
+        onWillAcceptWithDetails: (d) => d.data.col == col && d.data.row == row,
+        onAcceptWithDetails: (d) => onPiecePlaced(d.data),
+        builder: (context, candidateData, _) {
+          final isHovering = candidateData.isNotEmpty;
+          final clipper = edgeMap.clipperFor(row, col,
+              padding: EdgeInsets.fromLTRB(overflowX, overflowY, overflowX, overflowY));
+          return CustomPaint(
+            painter: _JigsawOutlinePainter(
+              clipper: clipper,
+              color: isHovering ? AppColors.pieceSnap : AppColors.tileBorder.withAlpha(150),
+              strokeWidth: isHovering ? 2.5 : 1.2,
+              fillColor: isHovering ? AppColors.pieceSnap.withAlpha(40) : null,
             ),
           );
         },
@@ -429,51 +449,141 @@ class _PieceTray extends StatelessWidget {
   }
 }
 
-class _TrayPiece extends StatelessWidget {
-  const _TrayPiece({required this.piece, required this.w, required this.h});
-  final _Piece piece;
-  final double w;
-  final double h;
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _JigsawOutlinePainter extends CustomPainter {
+  const _JigsawOutlinePainter({
+    required this.clipper,
+    required this.color,
+    this.strokeWidth = 1.0,
+    this.fillColor,
+  });
+
+  final JigsawClipper clipper;
+  final Color color;
+  final double strokeWidth;
+  final Color? fillColor;
 
   @override
-  Widget build(BuildContext context) {
-    return Transform.rotate(
-      angle: piece.rotationDeg * math.pi / 180,
-      child: Container(
-        width: w,
-        height: h,
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.primary, width: 2),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Image.memory(piece.bytes, fit: BoxFit.fill),
-      ),
-    );
+  void paint(Canvas canvas, Size size) {
+    final path = clipper.getClip(size);
+    if (fillColor != null) {
+      canvas.drawPath(path, Paint()..color = fillColor!..style = PaintingStyle.fill);
+    }
+    canvas.drawPath(path, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = strokeWidth);
   }
+
+  @override
+  bool shouldRepaint(_JigsawOutlinePainter old) =>
+      color != old.color || strokeWidth != old.strokeWidth || fillColor != old.fillColor;
 }
 
-class _DraggingPiece extends StatelessWidget {
-  const _DraggingPiece(
-      {required this.piece, required this.w, required this.h});
-  final _Piece piece;
-  final double w;
-  final double h;
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PieceTray extends StatefulWidget {
+  const _PieceTray({
+    required this.imageBytes,
+    required this.cols,
+    required this.rows,
+    required this.edgeMap,
+    required this.pieces,
+  });
+
+  final Uint8List imageBytes;
+  final int cols, rows;
+  final JigsawEdgeMap edgeMap;
+  final List<_Piece> pieces;
+
+  @override
+  State<_PieceTray> createState() => _PieceTrayState();
+}
+
+class _PieceTrayState extends State<_PieceTray> {
+  int _page = 0;
+
+  int get _pageSize {
+    final w = MediaQuery.of(context).size.width;
+    return (w / 120).floor().clamp(2, 8);
+  }
+
+  int get _totalPages =>
+      (widget.pieces.length / _pageSize).ceil().clamp(1, 999);
+
+  @override
+  void didUpdateWidget(_PieceTray old) {
+    super.didUpdateWidget(old);
+    if (_page >= _totalPages) _page = (_totalPages - 1).clamp(0, 999);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(4),
-      child: Container(
-        width: w,
-        height: h,
-        decoration: BoxDecoration(
-          border:
-              Border.all(color: AppColors.pieceSelected, width: 3),
-          borderRadius: BorderRadius.circular(4),
+    if (widget.pieces.isEmpty) {
+      return const Center(
+        child: Text('모든 조각을 배치했어요!',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
+      );
+    }
+
+    final start = _page * _pageSize;
+    final end = (start + _pageSize).clamp(0, widget.pieces.length);
+    final visible = widget.pieces.sublist(start, end);
+    final hasPrev = _page > 0;
+    final hasNext = _page < _totalPages - 1;
+
+    // Tray piece display size
+    const trayPieceSize = 90.0;
+    final cellW = trayPieceSize / (1 + kTabOverflow * 2);
+    final cellH = cellW; // square cells in tray for simplicity
+
+    return Row(
+      children: [
+        IconButton(
+          onPressed: hasPrev ? () => setState(() => _page--) : null,
+          icon: Icon(Icons.chevron_left_rounded, size: 32,
+              color: hasPrev ? AppColors.primary : AppColors.tileBorder),
         ),
-        child: Image.memory(piece.bytes, fit: BoxFit.fill),
-      ),
+        Expanded(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: visible.map((piece) {
+              final pieceView = _PieceView(
+                imageBytes: widget.imageBytes,
+                col: piece.col, row: piece.row,
+                cols: widget.cols, rows: widget.rows,
+                edgeMap: widget.edgeMap,
+                displayWidth: cellW, displayHeight: cellH,
+              );
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Draggable<_Piece>(
+                  data: piece,
+                  feedback: Material(
+                    color: Colors.transparent,
+                    elevation: 6,
+                    child: SizedBox(
+                        width: trayPieceSize, height: trayPieceSize,
+                        child: pieceView),
+                  ),
+                  childWhenDragging: Opacity(
+                    opacity: 0.3,
+                    child: SizedBox(
+                        width: trayPieceSize, height: trayPieceSize,
+                        child: pieceView),
+                  ),
+                  child: SizedBox(
+                      width: trayPieceSize, height: trayPieceSize,
+                      child: pieceView),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        IconButton(
+          onPressed: hasNext ? () => setState(() => _page++) : null,
+          icon: Icon(Icons.chevron_right_rounded, size: 32,
+              color: hasNext ? AppColors.primary : AppColors.tileBorder),
+        ),
+      ],
     );
   }
 }

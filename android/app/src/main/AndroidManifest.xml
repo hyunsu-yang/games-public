@@ -29,10 +29,10 @@
         android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
         android:hardwareAccelerated="true"
         android:windowSoftInputMode="adjustResize"
-        android:requestLegacyExternalStorage="false">
+        android:requestLegacyExternalStorage="false"
+        android:allowBackup="false">
 
         <!-- Do not allow backup (COPPA compliance — no cloud data) -->
-        <application android:allowBackup="false" />
 
         <!-- Main Flutter activity -->
         <activity

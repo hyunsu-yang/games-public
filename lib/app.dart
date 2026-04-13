@@ -5,13 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_theme.dart';
 import 'features/home/home_screen.dart';
 
-class SnapPuzzleApp extends ConsumerWidget {
-  const SnapPuzzleApp({super.key});
+class SeoaPuzzleApp extends ConsumerWidget {
+  const SeoaPuzzleApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
-      title: 'SnapPuzzle',
+      title: 'SeoaPuzzle',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: const HomeScreen(),

@@ -1,0 +1,33 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7E57C2"/>
+      <stop offset="100%" stop-color="#CE93D8"/>
+    </linearGradient>
+    <filter id="ds2">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg2)"/>
+  <g transform="translate(256,240) scale(1.35)" opacity="0.12">
+    <path d="M-80,-120 h60 c0,0 0,-30 30,-30 s30,30 30,30 h60 v60 c0,0 30,0 30,30 s-30,30 -30,30 v60 h-60 c0,0 0,30 -30,30 s-30,-30 -30,-30 h-60 v-60 c0,0 -30,0 -30,-30 s30,-30 30,-30 z" fill="white"/>
+  </g>
+  <g filter="url(#ds2)">
+    <rect x="60" y="168" width="95" height="95" rx="20" fill="#F48FB1"/>
+    <circle cx="155" cy="216" r="15" fill="#F48FB1"/>
+    <rect x="165" y="168" width="95" height="95" rx="20" fill="#CE93D8"/>
+    <circle cx="212" cy="263" r="15" fill="#CE93D8"/>
+    <rect x="270" y="168" width="95" height="95" rx="20" fill="#81D4FA"/>
+    <circle cx="365" cy="216" r="15" fill="#81D4FA"/>
+    <rect x="375" y="168" width="95" height="95" rx="20" fill="#A5D6A7"/>
+  </g>
+  <g font-family="Segoe UI,Helvetica,Arial,sans-serif" font-weight="700" fill="white" font-size="56" text-anchor="middle" dominant-baseline="central">
+    <text x="108" y="216">S</text>
+    <text x="212" y="216">E</text>
+    <text x="318" y="216">O</text>
+    <text x="422" y="216">A</text>
+  </g>
+  <text x="256" y="338" font-size="34" fill="white" text-anchor="middle" font-family="Segoe UI,Helvetica,sans-serif" opacity="0.85" letter-spacing="8" font-weight="600">PUZZLE</text>
+  <circle cx="85" cy="140" r="5" fill="white" opacity="0.45"/>
+  <circle cx="430" cy="145" r="4" fill="white" opacity="0.35"/>
+</svg>

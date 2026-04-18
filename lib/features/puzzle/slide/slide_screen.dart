@@ -41,6 +41,8 @@ class _SlideScreenState extends State<SlideScreen> {
   int _rows = 1;
   double _imageAspectRatio = 1.0;
   bool _showReference = false;
+  // Accumulated pan displacement for the tile currently being swiped.
+  Offset _panDelta = Offset.zero;
 
   @override
   void initState() {
@@ -220,28 +222,34 @@ class _SlideScreenState extends State<SlideScreen> {
     );
   }
 
-  /// Determine swipe direction from velocity on a specific tile.
+  /// Decide whether a pan gesture on a tile should trigger a slide.
+  ///
+  /// Uses accumulated pan displacement as the primary signal and release
+  /// velocity as a fallback for quick flings. A velocity-only check misses
+  /// slow, deliberate swipes where the finger decelerates to a stop before
+  /// lifting — a common pattern that was causing repeated retries.
   void _onTileSwipe(int index, Offset velocity) {
     if (!_engine.canMove(index)) return;
     final emptyIdx = _engine.emptyIndex;
 
-    // Calculate relative position of empty cell to this tile
     final tileRow = index ~/ _cols;
     final tileCol = index % _cols;
     final emptyRow = emptyIdx ~/ _cols;
     final emptyCol = emptyIdx % _cols;
 
-    // Only move if swipe direction matches the empty cell direction
     final dCol = emptyCol - tileCol;
     final dRow = emptyRow - tileRow;
 
-    bool shouldMove = false;
-    if (dCol == 1 && velocity.dx > 0) shouldMove = true; // swipe right toward empty
-    if (dCol == -1 && velocity.dx < 0) shouldMove = true; // swipe left toward empty
-    if (dRow == 1 && velocity.dy > 0) shouldMove = true; // swipe down toward empty
-    if (dRow == -1 && velocity.dy < 0) shouldMove = true; // swipe up toward empty
+    // Component of displacement/velocity pointing toward the empty cell.
+    final dirDisp = dCol != 0 ? _panDelta.dx * dCol : _panDelta.dy * dRow;
+    final dirVel = dCol != 0 ? velocity.dx * dCol : velocity.dy * dRow;
 
-    if (shouldMove) _onTileTap(index);
+    const distThreshold = 8.0;       // pixels of drag toward empty
+    const velThreshold = 120.0;      // pixels/second fling toward empty
+
+    if (dirDisp > distThreshold || dirVel > velThreshold) {
+      _onTileTap(index);
+    }
   }
 
   Widget _buildBoard(List<Uint8List> tiles, List<int> board) {
@@ -261,7 +269,10 @@ class _SlideScreenState extends State<SlideScreen> {
         final isCorrect = !isEmpty && tileValue == (i + 1) % (_cols * _rows);
 
         return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: canMove ? () => _onTileTap(i) : null,
+          onPanStart: canMove ? (_) => _panDelta = Offset.zero : null,
+          onPanUpdate: canMove ? (d) => _panDelta += d.delta : null,
           onPanEnd: canMove
               ? (d) => _onTileSwipe(i, d.velocity.pixelsPerSecond)
               : null,

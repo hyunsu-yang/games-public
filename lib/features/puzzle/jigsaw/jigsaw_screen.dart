@@ -436,15 +436,20 @@ class _BoardCell extends StatelessWidget {
         onWillAcceptWithDetails: (d) => d.data.col == col && d.data.row == row,
         onAcceptWithDetails: (d) => onPiecePlaced(d.data),
         builder: (context, candidateData, _) {
-          final isHovering = candidateData.isNotEmpty;
+          // Progressive hint: show the yellow snap guide only while fewer
+          // than half of the pieces have been placed. Once the player is
+          // past the halfway mark, the remaining cells no longer hint.
+          final placedCount = pieces.where((p) => p.isPlaced).length;
+          final guideActive = placedCount < pieces.length ~/ 2;
+          final showGuide = candidateData.isNotEmpty && guideActive;
           final clipper = edgeMap.clipperFor(row, col,
               padding: EdgeInsets.fromLTRB(overflowX, overflowY, overflowX, overflowY));
           return CustomPaint(
             painter: _JigsawOutlinePainter(
               clipper: clipper,
-              color: isHovering ? AppColors.pieceSnap : AppColors.tileBorder.withAlpha(150),
-              strokeWidth: isHovering ? 2.5 : 1.2,
-              fillColor: isHovering ? AppColors.pieceSnap.withAlpha(40) : null,
+              color: showGuide ? AppColors.pieceSnap : AppColors.tileBorder.withAlpha(150),
+              strokeWidth: showGuide ? 2.5 : 1.2,
+              fillColor: showGuide ? AppColors.pieceSnap.withAlpha(40) : null,
             ),
           );
         },

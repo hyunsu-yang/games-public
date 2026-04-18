@@ -12,7 +12,8 @@ import 'slide/slide_screen.dart';
 import 'rotate/rotate_screen.dart';
 import 'spot_difference/spot_difference_screen.dart';
 
-class DifficultySelectionScreen extends StatefulWidget {
+/// Tapping a difficulty tile starts the puzzle immediately.
+class DifficultySelectionScreen extends StatelessWidget {
   const DifficultySelectionScreen({
     super.key,
     required this.photo,
@@ -21,15 +22,6 @@ class DifficultySelectionScreen extends StatefulWidget {
 
   final Photo photo;
   final PuzzleType puzzleType;
-
-  @override
-  State<DifficultySelectionScreen> createState() =>
-      _DifficultySelectionScreenState();
-}
-
-class _DifficultySelectionScreenState
-    extends State<DifficultySelectionScreen> {
-  Difficulty? _selected;
 
   static const _descriptions = {
     Difficulty.easy: AppStrings.easyDesc,
@@ -45,11 +37,8 @@ class _DifficultySelectionScreenState
     Difficulty.expert: AppColors.expert,
   };
 
-  void _start() {
-    if (_selected == null) return;
-    final photo = widget.photo;
-    final diff = _selected!;
-    final route = switch (widget.puzzleType) {
+  void _start(BuildContext context, Difficulty diff) {
+    final route = switch (puzzleType) {
       PuzzleType.jigsaw => MaterialPageRoute(
           builder: (_) => JigsawScreen(photo: photo, difficulty: diff)),
       PuzzleType.slide => MaterialPageRoute(
@@ -68,7 +57,7 @@ class _DifficultySelectionScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(
-            '${widget.puzzleType.koreanName} — ${AppStrings.chooseDifficulty}'),
+            '${puzzleType.koreanName} — ${AppStrings.chooseDifficulty}'),
       ),
       body: Column(
         children: [
@@ -78,7 +67,7 @@ class _DifficultySelectionScreenState
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppSizes.radiusMd),
               child: Image.file(
-                File(widget.photo.thumbnailPath),
+                File(photo.thumbnailPath),
                 height: 120,
                 width: double.infinity,
                 fit: BoxFit.cover,
@@ -93,7 +82,6 @@ class _DifficultySelectionScreenState
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: Difficulty.values.map((d) {
-                  final isSelected = _selected == d;
                   return Padding(
                     padding:
                         const EdgeInsets.symmetric(vertical: AppSizes.sm),
@@ -101,24 +89,10 @@ class _DifficultySelectionScreenState
                       difficulty: d,
                       description: _descriptions[d]!,
                       color: _colors[d]!,
-                      isSelected: isSelected,
-                      onTap: () => setState(() => _selected = d),
+                      onTap: () => _start(context, d),
                     ),
                   );
                 }).toList(),
-              ),
-            ),
-          ),
-
-          // Start button
-          Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _selected == null ? null : _start,
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: const Text('시작!'),
               ),
             ),
           ),
@@ -133,48 +107,29 @@ class _DifficultyTile extends StatelessWidget {
     required this.difficulty,
     required this.description,
     required this.color,
-    required this.isSelected,
     required this.onTap,
   });
 
   final Difficulty difficulty;
   final String description;
   final Color color;
-  final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: Container(
         height: AppSizes.minTouchTarget * 1.8,
         decoration: BoxDecoration(
-          color: isSelected ? color : color.withAlpha(30),
+          color: color.withAlpha(30),
           borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-          border: Border.all(
-            color: isSelected ? color : color.withAlpha(80),
-            width: isSelected ? 3 : 1,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withAlpha(80),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  )
-                ]
-              : null,
+          border: Border.all(color: color.withAlpha(80), width: 1),
         ),
         padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
         child: Row(
           children: [
-            Icon(
-              Icons.stars_rounded,
-              color: isSelected ? Colors.white : color,
-              size: AppSizes.iconLg,
-            ),
+            Icon(Icons.stars_rounded, color: color, size: AppSizes.iconLg),
             const SizedBox(width: AppSizes.md),
             Expanded(
               child: Column(
@@ -183,29 +138,24 @@ class _DifficultyTile extends StatelessWidget {
                 children: [
                   Text(
                     difficulty.koreanName,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: isSelected
-                          ? Colors.white
-                          : AppColors.textPrimary,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   Text(
                     description,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 13,
-                      color: isSelected
-                          ? Colors.white.withAlpha(220)
-                          : AppColors.textSecondary,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
-            if (isSelected)
-              const Icon(Icons.check_circle_rounded,
-                  color: Colors.white, size: AppSizes.iconMd),
+            Icon(Icons.play_arrow_rounded,
+                color: color, size: AppSizes.iconMd),
           ],
         ),
       ),

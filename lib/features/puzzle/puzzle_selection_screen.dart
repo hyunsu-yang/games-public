@@ -11,18 +11,23 @@ import '../../shared/widgets/puzzle_mode_card.dart';
 import 'difficulty_selection_screen.dart';
 
 /// The user picks which of the 4 puzzle types to play.
-class PuzzleSelectionScreen extends StatefulWidget {
+/// Tapping a mode navigates immediately to the difficulty screen.
+class PuzzleSelectionScreen extends StatelessWidget {
   const PuzzleSelectionScreen({super.key, required this.photo});
 
   final Photo photo;
 
-  @override
-  State<PuzzleSelectionScreen> createState() =>
-      _PuzzleSelectionScreenState();
-}
-
-class _PuzzleSelectionScreenState extends State<PuzzleSelectionScreen> {
-  PuzzleType? _selected;
+  void _onModeSelected(BuildContext context, PuzzleType type) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DifficultySelectionScreen(
+          photo: photo,
+          puzzleType: type,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +45,7 @@ class _PuzzleSelectionScreenState extends State<PuzzleSelectionScreen> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppSizes.radiusMd),
               image: DecorationImage(
-                image: FileImage(File(widget.photo.filePath)),
+                image: FileImage(File(photo.filePath)),
                 fit: BoxFit.cover,
               ),
               boxShadow: const [
@@ -56,7 +61,7 @@ class _PuzzleSelectionScreenState extends State<PuzzleSelectionScreen> {
           // Mode grid
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSizes.md),
+              padding: const EdgeInsets.all(AppSizes.md),
               child: GridView.count(
                 crossAxisCount: 2,
                 mainAxisSpacing: AppSizes.md,
@@ -64,32 +69,9 @@ class _PuzzleSelectionScreenState extends State<PuzzleSelectionScreen> {
                 children: PuzzleType.values.map((type) {
                   return PuzzleModeCard(
                     type: type,
-                    isSelected: _selected == type,
-                    onTap: () => setState(() => _selected = type),
+                    onTap: () => _onModeSelected(context, type),
                   );
                 }).toList(),
-              ),
-            ),
-          ),
-
-          // Continue button
-          Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _selected == null
-                    ? null
-                    : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => DifficultySelectionScreen(
-                              photo: widget.photo,
-                              puzzleType: _selected!,
-                            ),
-                          ),
-                        ),
-                child: const Text('다음 →'),
               ),
             ),
           ),
